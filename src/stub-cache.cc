@@ -920,22 +920,20 @@ void StubCache::CollectMatchingMaps(SmallMapList* types,
 // ------------------------------------------------------------------------
 // StubCompiler implementation.
 
-
-RUNTIME_FUNCTION(MaybeObject*, LoadCallbackProperty) {
-  ASSERT(args[0]->IsJSObject());
-  ASSERT(args[1]->IsJSObject());
-  AccessorInfo* callback = AccessorInfo::cast(args[3]);
+MaybeObject* LoadCallbackPropertyInternal(Isolate* isolate, Arguments *args) {
+  AccessorInfo* callback = AccessorInfo::cast((*args)[3]); // callback info
   Address getter_address = v8::ToCData<Address>(callback->getter());
   v8::AccessorGetter fun = FUNCTION_CAST<v8::AccessorGetter>(getter_address);
   ASSERT(fun != NULL);
-  v8::AccessorInfo info(&args[0]);
+  v8::AccessorInfo info(&(*args)[0]);
+
   HandleScope scope(isolate);
   v8::Handle<v8::Value> result;
   {
     // Leaving JavaScript.
     VMState state(isolate, EXTERNAL);
     ExternalCallbackScope call_scope(isolate, getter_address);
-    result = fun(v8::Utils::ToLocal(args.at<String>(4)), info);
+    result = fun(v8::Utils::ToLocal(args->at<String>(4)), info); // name
   }
   RETURN_IF_SCHEDULED_EXCEPTION(isolate);
   if (result.IsEmpty()) return HEAP->undefined_value();
@@ -943,14 +941,73 @@ RUNTIME_FUNCTION(MaybeObject*, LoadCallbackProperty) {
 }
 
 
-RUNTIME_FUNCTION(MaybeObject*, StoreCallbackProperty) {
-  JSObject* recv = JSObject::cast(args[0]);
-  AccessorInfo* callback = AccessorInfo::cast(args[1]);
+MaybeObject* LoadCallbackPropertyTaintCheck(Isolate* isolate, Arguments *args) {
+  if (!isolate->context()->HasTaintPolicyContext())
+    return LoadCallbackPropertyInternal(isolate, args);
+  
+  MaybeObject* result;
+  bool taint = false;
+  HandleScope scope(isolate);
+  Vector< Handle<Object> > back_holder =
+    Vector< Handle<Object> >::New(args->length());
+  TaintPolicyHelper::BackArgumentsWithHandles(*args, back_holder);
+  Vector< Handle<Object> > policy_args = Vector< Handle<Object> >::New(3);
+  policy_args[0] = Handle<Object>::cast(
+      isolate->factory()->LookupAsciiSymbol("get"));
+  policy_args[1] = back_holder[1]; // holder
+  policy_args[2] = back_holder[4]; // name
+
+  result = Execution::TaintPolicyCheck(isolate, policy_args, &taint);
+  if (result) goto leave;
+
+  // TODO(petr): get rid of this assert if needed
+  ASSERT(!TaintPolicyHelper::HasTaintedArguments(policy_args));
+
+  // args contain handle-locations of objects, replace the values
+  // within the handle-locations if the object is tatined
+  TaintPolicyHelper::UntaintArguments(back_holder);
+
+  TaintPolicyHelper::ResetArgumentsFromHandles(*args, back_holder);
+
+  {
+    UntaintedContextScope ctx_scope(isolate->context());
+    result = LoadCallbackPropertyInternal(isolate, args);
+  }
+
+  Object* obj;
+  if (taint && result->ToObject(&obj)) {
+    result = obj->Taint();
+  }
+
+ leave:
+  back_holder.Dispose();
+  policy_args.Dispose();
+  return result;
+}
+
+
+RUNTIME_FUNCTION(MaybeObject*, LoadCallbackProperty) {
+  ASSERT_IF_TAINTED_ARGS();
+  ASSERT(args[0]->IsJSObject());
+  ASSERT(args[1]->IsJSObject());
+  // receiver       args[0]
+  // holder         args[1]
+  // data           args[2]
+  // callback info  args[3]
+  // name           args[4]
+
+  return LoadCallbackPropertyTaintCheck(isolate, &args);
+}
+
+
+MaybeObject* StoreCallbackPropertyInternal(Isolate* isolate, Arguments *args) {
+  JSObject* recv = JSObject::cast((*args)[0]);
+  AccessorInfo* callback = AccessorInfo::cast((*args)[1]);
   Address setter_address = v8::ToCData<Address>(callback->setter());
   v8::AccessorSetter fun = FUNCTION_CAST<v8::AccessorSetter>(setter_address);
   ASSERT(fun != NULL);
-  Handle<String> name = args.at<String>(2);
-  Handle<Object> value = args.at<Object>(3);
+  Handle<String> name = args->at<String>(2);
+  Handle<Object> value = args->at<Object>(3);
   HandleScope scope(isolate);
   LOG(isolate, ApiNamedPropertyAccess("store", recv, *name));
   CustomArguments custom_args(isolate, callback->data(), recv, recv);
@@ -966,6 +1023,56 @@ RUNTIME_FUNCTION(MaybeObject*, StoreCallbackProperty) {
 }
 
 
+MaybeObject* StoreCallbackPropertyTaintCheck(Isolate* isolate,
+                                             Arguments *args) {
+  if (!isolate->context()->HasTaintPolicyContext())
+    return StoreCallbackPropertyInternal(isolate, args);
+
+  MaybeObject* result;
+  HandleScope scope(isolate);
+  Vector< Handle<Object> > back_holder =
+    Vector< Handle<Object> >::New(args->length());
+  TaintPolicyHelper::BackArgumentsWithHandles(*args, back_holder);
+  Vector< Handle<Object> > policy_args = Vector< Handle<Object> >::New(4);
+  policy_args[0] = Handle<Object>::cast(
+      isolate->factory()->LookupAsciiSymbol("set"));
+  policy_args[1] = back_holder[0]; // holder
+  policy_args[2] = back_holder[2]; // name
+  policy_args[2] = back_holder[3]; // value
+
+  result = Execution::TaintPolicyCheck(isolate, policy_args);
+  if (result) goto leave;
+
+  // TODO(petr): get rid of this assert if needed
+  ASSERT(!TaintPolicyHelper::HasTaintedArguments(policy_args));
+
+  // args contain handle-locations of objects, replace the values
+  // within the handle-locations if the object is tatined
+  TaintPolicyHelper::UntaintArguments(back_holder);
+
+  TaintPolicyHelper::ResetArgumentsFromHandles(*args, back_holder);
+
+  {
+    UntaintedContextScope ctx_scope(isolate->context());
+    result = StoreCallbackPropertyInternal(isolate, args);
+  }
+
+ leave:
+  back_holder.Dispose();
+  policy_args.Dispose();
+  return result;
+}
+
+
+RUNTIME_FUNCTION(MaybeObject*, StoreCallbackProperty) {
+  // receiver       args[0]
+  // callback info args[1]
+  // name          args[2]
+  // value         args[3]
+  return StoreCallbackPropertyTaintCheck(isolate, &args);
+}
+
+
 static const int kAccessorInfoOffsetInInterceptorArgs = 2;
 
 
@@ -976,13 +1083,14 @@ static const int kAccessorInfoOffsetInInterceptorArgs = 2;
  * Returns |Heap::no_interceptor_result_sentinel()| if interceptor doesn't
  * provide any value for the given name.
  */
-RUNTIME_FUNCTION(MaybeObject*, LoadPropertyWithInterceptorOnly) {
-  Handle<String> name_handle = args.at<String>(0);
-  Handle<InterceptorInfo> interceptor_info = args.at<InterceptorInfo>(1);
+MaybeObject* LoadPropertyWithInterceptorOnlyInternal(Isolate* isolate,
+                                                     Arguments *args) {
+  Handle<String> name_handle = args->at<String>(0);
+  Handle<InterceptorInfo> interceptor_info = args->at<InterceptorInfo>(1);
   ASSERT(kAccessorInfoOffsetInInterceptorArgs == 2);
-  ASSERT(args[2]->IsJSObject());  // Receiver.
-  ASSERT(args[3]->IsJSObject());  // Holder.
-  ASSERT(args.length() == 5);  // Last arg is data object.
+  ASSERT((*args)[2]->IsJSObject());  // Receiver.
+  ASSERT((*args)[3]->IsJSObject());  // Holder.
+  ASSERT(args->length() == 5);  // Last arg is data object.
 
   Address getter_address = v8::ToCData<Address>(interceptor_info->getter());
   v8::NamedPropertyGetter getter =
@@ -991,7 +1099,7 @@ RUNTIME_FUNCTION(MaybeObject*, LoadPropertyWithInterceptorOnly) {
 
   {
     // Use the interceptor getter.
-    v8::AccessorInfo info(args.arguments() -
+    v8::AccessorInfo info(args->arguments() -
                           kAccessorInfoOffsetInInterceptorArgs);
     HandleScope scope(isolate);
     v8::Handle<v8::Value> r;
@@ -1007,6 +1115,63 @@ RUNTIME_FUNCTION(MaybeObject*, LoadPropertyWithInterceptorOnly) {
   }
 
   return isolate->heap()->no_interceptor_result_sentinel();
+}
+
+
+MaybeObject* LoadPropertyWithInterceptorOnlyTaintCheck(Isolate *isolate,
+                                                       Arguments *args) {
+  if (!isolate->context()->HasTaintPolicyContext())
+    return LoadPropertyWithInterceptorOnlyInternal(isolate, args);
+  
+  MaybeObject* result;
+  bool taint = false;
+  HandleScope scope(isolate);
+  Vector< Handle<Object> > back_holder =
+    Vector< Handle<Object> >::New(args->length());
+  TaintPolicyHelper::BackArgumentsWithHandles(*args, back_holder);
+  Vector< Handle<Object> > policy_args = Vector< Handle<Object> >::New(3);
+  policy_args[0] = Handle<Object>::cast(
+      isolate->factory()->LookupAsciiSymbol("get"));
+  policy_args[1] = back_holder[3]; // holder
+  policy_args[2] = back_holder[0]; // name
+
+  result = Execution::TaintPolicyCheck(isolate, policy_args, &taint);
+  if (result) goto leave;
+
+  // TODO(petr): get rid of this assert if needed
+  ASSERT(!TaintPolicyHelper::HasTaintedArguments(policy_args));
+
+  // args contain handle-locations of objects, replace the values
+  // within the handle-locations if the object is tatined
+  TaintPolicyHelper::UntaintArguments(back_holder);
+
+  TaintPolicyHelper::ResetArgumentsFromHandles(*args, back_holder);
+
+  {
+    UntaintedContextScope ctx_scope(isolate->context());
+    result = LoadPropertyWithInterceptorOnlyInternal(isolate, args);
+  }
+
+  Object* obj;
+  if (taint && result->ToObject(&obj)) {
+    result = obj->Taint();
+  }
+
+ leave:
+  back_holder.Dispose();
+  policy_args.Dispose();
+  return result;
+}
+
+
+RUNTIME_FUNCTION(MaybeObject*, LoadPropertyWithInterceptorOnly) {
+  ASSERT_IF_TAINTED_ARGS();
+  // name             args[0]
+  // interceptor info args[1]
+  // receiver         args[2]
+  // holder           args[3]
+  // data             args[4]
+  return LoadPropertyWithInterceptorOnlyTaintCheck(isolate, &args);
 }
 
 
@@ -1071,14 +1236,62 @@ static MaybeObject* LoadWithInterceptor(Arguments* args,
 }
 
 
+static MaybeObject* LoadWithInterceptorTaintCheck(Arguments* args,
+                                                  PropertyAttributes* attrs) {
+  Isolate* isolate = HeapObject::cast((*args)[0])->GetIsolate();
+  if (!isolate->context()->HasTaintPolicyContext())
+    return LoadWithInterceptor(args, attrs);
+  
+  MaybeObject* result;
+  bool taint = false;
+  HandleScope scope(isolate);
+  Vector< Handle<Object> > back_holder =
+    Vector< Handle<Object> >::New(args->length());
+  TaintPolicyHelper::BackArgumentsWithHandles(*args, back_holder);
+  Vector< Handle<Object> > policy_args = Vector< Handle<Object> >::New(3);
+  policy_args[0] = Handle<Object>::cast(
+      isolate->factory()->LookupAsciiSymbol("get"));
+  policy_args[1] = back_holder[3]; // holder
+  policy_args[2] = back_holder[0]; // name
+
+  result = Execution::TaintPolicyCheck(isolate, policy_args, &taint);
+  if (result) goto leave;
+
+  // TODO(petr): get rid of this assert if needed
+  ASSERT(!TaintPolicyHelper::HasTaintedArguments(policy_args));
+
+  // args contain handle-locations of objects, replace the values
+  // within the handle-locations if the object is tatined
+  TaintPolicyHelper::UntaintArguments(back_holder);
+
+  TaintPolicyHelper::ResetArgumentsFromHandles(*args, back_holder);
+
+  {
+    UntaintedContextScope ctx_scope(isolate->context());
+    result = LoadWithInterceptor(args, attrs);
+  }
+
+  Object* obj;
+  if (taint && result->ToObject(&obj)) {
+    result = obj->Taint();
+  }
+
+ leave:
+  back_holder.Dispose();
+  policy_args.Dispose();
+  return result;
+}
+
+
 /**
  * Loads a property with an interceptor performing post interceptor
  * lookup if interceptor failed.
  */
 RUNTIME_FUNCTION(MaybeObject*, LoadPropertyWithInterceptorForLoad) {
+  ASSERT_IF_TAINTED_ARGS();
   PropertyAttributes attr = NONE;
   Object* result;
-  { MaybeObject* maybe_result = LoadWithInterceptor(&args, &attr);
+  { MaybeObject* maybe_result = LoadWithInterceptorTaintCheck(&args, &attr);
     if (!maybe_result->ToObject(&result)) return maybe_result;
   }
 
@@ -1089,8 +1302,9 @@ RUNTIME_FUNCTION(MaybeObject*, LoadPropertyWithInterceptorForLoad) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, LoadPropertyWithInterceptorForCall) {
+  ASSERT_IF_TAINTED_ARGS();
   PropertyAttributes attr;
-  MaybeObject* result = LoadWithInterceptor(&args, &attr);
+  MaybeObject* result = LoadWithInterceptorTaintCheck(&args, &attr);
   RETURN_IF_SCHEDULED_EXCEPTION(isolate);
   // This is call IC. In this case, we simply return the undefined result which
   // will lead to an exception when trying to invoke the result as a
@@ -1100,6 +1314,7 @@ RUNTIME_FUNCTION(MaybeObject*, LoadPropertyWithInterceptorForCall) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, StoreInterceptorProperty) {
+  ASSERT_IF_TAINTED_ARGS();
   ASSERT(args.length() == 4);
   JSObject* recv = JSObject::cast(args[0]);
   String* name = String::cast(args[1]);
@@ -1108,17 +1323,18 @@ RUNTIME_FUNCTION(MaybeObject*, StoreInterceptorProperty) {
   StrictModeFlag strict_mode = static_cast<StrictModeFlag>(args.smi_at(3));
   ASSERT(recv->HasNamedInterceptor());
   PropertyAttributes attr = NONE;
-  MaybeObject* result = recv->SetPropertyWithInterceptor(
+  MaybeObject* result = recv->SetPropertyWithInterceptorTaintCheck(
       name, value, attr, strict_mode);
   return result;
 }
 
 
 RUNTIME_FUNCTION(MaybeObject*, KeyedLoadPropertyWithInterceptor) {
+  ASSERT_IF_TAINTED_ARGS();
   JSObject* receiver = JSObject::cast(args[0]);
   ASSERT(args.smi_at(1) >= 0);
   uint32_t index = args.smi_at(1);
-  return receiver->GetElementWithInterceptor(receiver, index);
+  return receiver->GetElementWithInterceptorTaintCheck(receiver, index);
 }
 
 

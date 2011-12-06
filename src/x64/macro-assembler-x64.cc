@@ -3690,6 +3690,51 @@ void MacroAssembler::AllocateInNewSpace(Register object_size,
 }
 
 
+Condition MacroAssembler::CheckTainted(Register src) {
+  CmpObjectType(src, TAINTED_TYPE, kScratchRegister);
+  return equal;
+}
+
+
+void MacroAssembler::JumpIfTainted(Register src,
+                                   Label* on_tainted,
+                                   Label::Distance near_jump) {
+  Label not_tainted;
+  Condition smi = CheckSmi(src);
+  j(smi, &not_tainted, Label::kNear);
+  Condition tainted = CheckTainted(src);
+  j(tainted, on_tainted, near_jump);
+  bind(&not_tainted);
+}
+
+
+void MacroAssembler::JumpIfNotTainted(Register src,
+                                      Label* on_not_tainted,
+                                      Label::Distance near_jump) {
+  Condition smi = CheckSmi(src);
+  j(smi, on_not_tainted, near_jump);
+  Condition tainted = CheckTainted(src);
+  j(NegateCondition(tainted), on_not_tainted, near_jump);
+}
+
+
+void MacroAssembler::Untaint(Register src) {
+  Label not_tainted;
+  Condition smi = CheckSmi(src);
+  j(smi, &not_tainted, Label::kNear);
+  Condition tainted = CheckTainted(src);
+  j(NegateCondition(tainted), &not_tainted, Label::kNear);
+  movq(src, FieldOperand(src, Tainted::kObjectOffset));
+  bind(&not_tainted);
+}
+
+
+void MacroAssembler::Untaint(Register dst, Register src) {
+  movq(dst, src);
+  Untaint(dst);
+}
+
+
 void MacroAssembler::UndoAllocationInNewSpace(Register object) {
   ExternalReference new_space_allocation_top =
       ExternalReference::new_space_allocation_top_address(isolate());

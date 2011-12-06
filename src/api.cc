@@ -4268,6 +4268,101 @@ void Context::AllowCodeGenerationFromStrings(bool allow) {
 }
 
 
+bool Context::SetTaintPolicy(Handle<Context> taint_context,
+                             Handle<String> source,
+                             Handle<Value> file) {
+  i::Isolate* isolate = i::Isolate::Current();
+  bool no_taint_context = false;
+  if (IsDeadCheck(isolate, "v8::Context::SetTaintPolicy()")) {
+    return false;
+  }
+
+  if (!i::FLAG_taint_policy) return false;
+
+  i::Object** ctx = reinterpret_cast<i::Object**>(this);
+  i::Handle<i::Context> context =
+      i::Handle<i::Context>::cast(i::Handle<i::Object>(ctx));
+
+  if (taint_context.IsEmpty()) {
+    no_taint_context = true;
+    taint_context =
+      Utils::ToLocal(i::Handle<i::Context>(context->global_context()));
+  }
+
+  i::HandleScope scope(isolate);
+
+  if (source.IsEmpty()) {
+    bool exists;
+    source =
+      v8::String::New(i::ReadFile(i::FLAG_taint_policy_file, &exists).start());
+    if (!ApiCheck(exists,
+                  "v8::Context::SetTaintPolicy()",
+                  "cannot open policy file specified "
+                  "with the --taint_policy_file flag")) {
+      return false;
+    }
+
+    file = v8::String::New(i::FLAG_taint_policy_file);
+  }
+
+  // check if the taint context has been already initialized
+  i::Handle<i::String> name =
+    isolate->factory()->LookupAsciiSymbol("TaintPolicyEngine");
+  i::MaybeObject* maybe_obj =
+    Utils::OpenHandle(*taint_context)->global()->GetProperty(*name);
+  if (maybe_obj->IsFailure()) {
+    // TODO(petr): need to report an error message
+    ASSERT(0);
+    return false;
+  }
+
+  if (!maybe_obj->ToObjectUnchecked()->IsJSFunction()) {
+    // Compile taint policy script under taint context,
+    // then when the script will be invoked it will always run under the
+    // taint context
+    v8::Context::Scope contextScope(taint_context);
+    v8::TryCatch try_catch;
+    v8::Handle<v8::Script> script = v8::Script::Compile(source, file);
+    if (script.IsEmpty()) {
+      // TODO(petr): need to report an error message
+      ASSERT(0);
+      return false;
+    }
+    script->Run();
+    if (try_catch.HasCaught()) {
+      // TODO(petr): need to report an error message
+      ASSERT(0);
+      return false;
+    }
+  }
+
+  // check that the expected function is present in the taint context
+  maybe_obj = Utils::OpenHandle(*taint_context)->global()->GetProperty(*name);
+  if (maybe_obj->IsFailure()) {
+    // TODO(petr): need to report an error message
+    ASSERT(0);
+    return false;
+  }
+  if (!maybe_obj->ToObjectUnchecked()->IsJSFunction()) {
+    ASSERT(!isolate->has_pending_exception());
+    i::Handle<i::Object> error_obj = 
+      isolate->factory()->NewError(isolate->factory()->LookupAsciiSymbol(
+                                   "TaintPolicyEngine() is missing"));
+    isolate->Throw(*error_obj);
+    isolate->ReportPendingMessages();
+    return false;
+  }
+  
+  if (!no_taint_context) {
+    context->set_taint_policy_context(*Utils::OpenHandle(*taint_context));
+  } else {
+    context->set_taint_policy_context(isolate->heap()->null_value());
+  }
+
+  return true;
+}
+
+
 void V8::SetWrapperClassId(i::Object** global_handle, uint16_t class_id) {
   i::GlobalHandles::SetWrapperClassId(global_handle, class_id);
 }
@@ -5135,6 +5230,7 @@ void Isolate::SetData(void* data) {
   i::Isolate* isolate = reinterpret_cast<i::Isolate*>(this);
   isolate->SetData(data);
 }
+
 
 void* Isolate::GetData() {
   i::Isolate* isolate = reinterpret_cast<i::Isolate*>(this);

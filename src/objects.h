@@ -104,6 +104,7 @@
 //       - Map
 //       - Oddball
 //       - Foreign
+//       - Tainted
 //       - SharedFunctionInfo
 //       - Struct
 //         - AccessorInfo
@@ -568,6 +569,8 @@ enum InstanceType {
   FIXED_DOUBLE_ARRAY_TYPE,
   FILLER_TYPE,  // LAST_DATA_TYPE
 
+  TAINTED_TYPE,
+
   // Structs.
   ACCESSOR_INFO_TYPE,
   ACCESS_CHECK_INFO_TYPE,
@@ -797,6 +800,7 @@ class MaybeObject BASE_EMBEDDED {
   V(JSMessageObject)                           \
   V(StringWrapper)                             \
   V(Foreign)                                   \
+  V(Tainted)                                   \
   V(Boolean)                                   \
   V(JSArray)                                   \
   V(JSProxy)                                   \
@@ -938,6 +942,18 @@ class Object : public MaybeObject {
   // Returns true if this is a JSValue containing a string and the index is
   // < the length of the string.  Used to implement [] on strings.
   inline bool IsStringObjectWithCharacterAt(uint32_t index);
+
+  // Object tainting. If an object is pass-by-reference, we use TaintObject and
+  // overwrite it in place. If an object is pass-by-value, we use TaintReference
+  // and wrap reference to the object with Tainted object
+  MUST_USE_RESULT MaybeObject* TaintReference();
+  MUST_USE_RESULT MaybeObject* TaintObject();
+  MUST_USE_RESULT MaybeObject* Taint();
+
+  // Object untainting
+  Object* UntaintReference();
+  MaybeObject* UntaintObject();
+  MaybeObject* Untaint();
 
 #ifdef DEBUG
   // Verify a pointer is a valid object pointer.
@@ -1479,6 +1495,11 @@ class JSObject: public JSReceiver {
                                                        Object* structure,
                                                        String* name);
 
+  MUST_USE_RESULT MaybeObject* GetPropertyWithCallbackTaintCheck(
+                                                       Object* receiver,
+                                                       Object* structure,
+                                                       String* name);
+
   // Can cause GC.
   MUST_USE_RESULT MaybeObject* SetPropertyForResult(LookupResult* result,
                                            String* key,
@@ -1497,7 +1518,18 @@ class JSObject: public JSReceiver {
       Object* value,
       JSObject* holder,
       StrictModeFlag strict_mode);
+  MUST_USE_RESULT MaybeObject* SetPropertyWithCallbackTaintCheck(
+      Object* structure,
+      String* name,
+      Object* value,
+      JSObject* holder,
+      StrictModeFlag strict_mode);
   MUST_USE_RESULT MaybeObject* SetPropertyWithInterceptor(
+      String* name,
+      Object* value,
+      PropertyAttributes attributes,
+      StrictModeFlag strict_mode);
+  MUST_USE_RESULT MaybeObject* SetPropertyWithInterceptorTaintCheck(
       String* name,
       Object* value,
       PropertyAttributes attributes,
@@ -1562,6 +1594,10 @@ class JSObject: public JSReceiver {
       String* name,
       PropertyAttributes* attributes);
   MaybeObject* GetPropertyWithInterceptor(
+      JSReceiver* receiver,
+      String* name,
+      PropertyAttributes* attributes);
+  MaybeObject* GetPropertyWithInterceptorTaintCheck(
       JSReceiver* receiver,
       String* name,
       PropertyAttributes* attributes);
@@ -1693,6 +1729,8 @@ class JSObject: public JSReceiver {
   // Returns the index'th element.
   // The undefined object if index is out of bounds.
   MaybeObject* GetElementWithInterceptor(Object* receiver, uint32_t index);
+  MaybeObject* GetElementWithInterceptorTaintCheck(Object* receiver,
+                                                   uint32_t index);
 
   enum SetFastElementsCapacityMode {
     kAllowSmiOnlyElements,
@@ -1991,12 +2029,27 @@ class JSObject: public JSReceiver {
                                                       Object* structure,
                                                       uint32_t index,
                                                       Object* holder);
+  MUST_USE_RESULT MaybeObject* GetElementWithCallbackTaintCheck(
+      Object* receiver,
+      Object* structure,
+      uint32_t index,
+      Object* holder);
   MaybeObject* SetElementWithCallback(Object* structure,
                                       uint32_t index,
                                       Object* value,
                                       JSObject* holder,
                                       StrictModeFlag strict_mode);
+  MaybeObject* SetElementWithCallbackTaintCheck(Object* structure,
+                                                uint32_t index,
+                                                Object* value,
+                                                JSObject* holder,
+                                                StrictModeFlag strict_mode);
   MUST_USE_RESULT MaybeObject* SetElementWithInterceptor(
+      uint32_t index,
+      Object* value,
+      StrictModeFlag strict_mode,
+      bool check_prototype);
+  MUST_USE_RESULT MaybeObject* SetElementWithInterceptorTaintCheck(
       uint32_t index,
       Object* value,
       StrictModeFlag strict_mode,
@@ -2022,8 +2075,12 @@ class JSObject: public JSReceiver {
   MUST_USE_RESULT MaybeObject* DeletePropertyPostInterceptor(String* name,
                                                              DeleteMode mode);
   MUST_USE_RESULT MaybeObject* DeletePropertyWithInterceptor(String* name);
+  MUST_USE_RESULT MaybeObject* DeletePropertyWithInterceptorTaintCheck(
+                                                             String* name);
 
   MUST_USE_RESULT MaybeObject* DeleteElementWithInterceptor(uint32_t index);
+  MUST_USE_RESULT MaybeObject* DeleteElementWithInterceptorTaintCheck(
+                                                             uint32_t index);
 
   MUST_USE_RESULT MaybeObject* DeleteFastElement(uint32_t index);
   MUST_USE_RESULT MaybeObject* DeleteDictionaryElement(uint32_t index,
@@ -7362,6 +7419,52 @@ class Foreign: public HeapObject {
 
  private:
   DISALLOW_IMPLICIT_CONSTRUCTORS(Foreign);
+};
+
+
+// Tainted class is a wrapper class that describes tainted
+// objects. Instances of this class contain references to the real
+// objects.
+class Tainted: public HeapObject {
+ public:
+  // [tainted_object]: field containing the reference to an object
+  DECL_ACCESSORS(tainted_object, Object)
+
+  // [size]: used memory by this object
+  inline int size();
+  inline void set_size(int value);
+
+  // Casting.
+  static inline Tainted* cast(Object* obj);
+
+#ifdef OBJECT_PRINT
+  inline void TaintedPrint() {
+    TaintedPrint(stdout);
+  }
+  void TaintedPrint(FILE* out);
+#endif
+#ifdef DEBUG
+  void TaintedVerify();
+#endif
+
+  // Layout description.
+  static const int kSizeOffset = HeapObject::kHeaderSize;
+  static const int kObjectOffset = kSizeOffset + kPointerSize;
+  static const int kSize = kObjectOffset + kPointerSize;
+
+  // TODO(petr): optimization: we do not need to iterate through
+  // whole body of Tainted; instead we need to visit just one
+  // pointer. Define an new class FlexibleBodyDescriptor
+  class BodyDescriptor : 
+   public FlexibleBodyDescriptor<kObjectOffset> {
+   public:
+    static inline int SizeOf(Map* map, HeapObject* object) {
+      return reinterpret_cast<Tainted*>(object)->size();
+    }
+  };
+
+ private:
+  DISALLOW_IMPLICIT_CONSTRUCTORS(Tainted);
 };
 
 

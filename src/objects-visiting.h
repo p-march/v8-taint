@@ -110,6 +110,8 @@ class StaticVisitorBase : public AllStatic {
     kVisitJSWeakMap,
     kVisitJSRegExp,
 
+    kVisitTainted,
+
     kVisitorIdCount,
     kMinObjectSizeInWords = 2
   };

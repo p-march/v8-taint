@@ -2205,6 +2205,35 @@ void MacroAssembler::Move(Register dst, Register src) {
 }
 
 
+Condition MacroAssembler::CheckTainted(Register src, Register scratch) {
+  CmpObjectType(src, TAINTED_TYPE, scratch);
+  return equal;
+}
+
+
+void MacroAssembler::JumpIfTainted(Register src,
+                                   Register scratch,
+                                   Label* on_tainted,
+                                   Label::Distance near_jump) {
+  Label not_tainted;
+  JumpIfSmi(src, &not_tainted, Label::kNear);
+  Condition tainted = CheckTainted(src, scratch);
+  j(tainted, on_tainted, near_jump);
+  bind(&not_tainted);
+}
+
+
+void MacroAssembler::Untaint(Register src, Register scratch) {
+  ASSERT(!src.is(scratch));
+  Label not_tainted;
+  JumpIfSmi(src, &not_tainted, Label::kNear);
+  Condition tainted = CheckTainted(src, scratch);
+  j(NegateCondition(tainted), &not_tainted, Label::kNear);
+  mov(src, FieldOperand(src, Tainted::kObjectOffset));
+  bind(&not_tainted);
+}
+
+
 void MacroAssembler::SetCounter(StatsCounter* counter, int value) {
   if (FLAG_native_code_counters && counter->Enabled()) {
     mov(Operand::StaticVariable(ExternalReference(counter)), Immediate(value));

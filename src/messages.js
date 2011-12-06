@@ -43,15 +43,22 @@ function FormatString(format, message) {
   var arg_num = 0;
   for (var i = 0; i < format.length; i++) {
     var str = format[i];
-    if (str.length == 2 && %_StringCharCodeAt(str, 0) == 0x25) {
+    if ((str.length == 2 || str.length == 3) && %_StringCharCodeAt(str, 0) == 0x25) {
       // Two-char string starts with "%".
       var arg_num = (%_StringCharCodeAt(str, 1) - 0x30) >>> 0;
+      var has_plus = str.length == 3 &&  %_StringCharCodeAt(str, 2) == 0x2b ? true : false;
       if (arg_num < 4) {
-        // str is one of %0, %1, %2 or %3.
-        try {
-          str = ToDetailString(args[arg_num]);
-        } catch (e) {
-          str = "#<error>";
+        str = "";
+        var limit = has_plus ? args.length : arg_num + 1;
+        for (var j = arg_num; j < limit; j++) {
+          try {
+            str += %_IsTainted(args[j]) ? "<Tainted argument>, " : ToDetailString(args[j]) + ", ";
+          } catch (e) {
+            str += "#<error>, ";
+          }
+        }
+        if (str.length >= 2) {
+          str = str.substring(0, str.length-2);
         }
       }
     }
@@ -247,6 +254,7 @@ function FormatMessage(message) {
       "cant_prevent_ext_external_array_elements", ["Cannot prevent extension of an object with external array elements"],
       "redef_external_array_element", ["Cannot redefine a property of an object with external array elements"],
       "harmony_const_assign",         ["Assignment to constant variable."],
+      "taint_policy",                 ["Taint policy check failed (operation: '", "%0", "', object: '", "%1", "', property: '", "%2", "', args: '", "%3+", "')"],
     ];
     var messages = { __proto__ : null };
     for (var i = 0; i < messagesDictionary.length; i += 2) {

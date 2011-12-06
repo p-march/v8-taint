@@ -2908,6 +2908,14 @@ Expression* Parser::ParseUnaryExpression(bool* ok) {
       }
     }
 
+    if (op == Token::NOT) {
+      ZoneList<Expression*>* args = new(zone()) ZoneList<Expression*>(1);
+      args->Add(expression);
+      Handle<String> name = isolate()->factory()->NewStringFromUtf8(CStrVector("_TaintNot"), TENURED);
+      const Runtime::Function* function = Runtime::FunctionForId(Runtime::kInlineTaintNot);
+      return new(zone()) CallRuntime(isolate(), name, function, args);
+    }
+    
     return new(zone()) UnaryOperation(isolate(), op, expression, position);
 
   } else if (Token::IsCountOp(op)) {

@@ -352,10 +352,10 @@ Handle<Object> SetPropertyWithInterceptor(Handle<JSObject> object,
                                           PropertyAttributes attributes,
                                           StrictModeFlag strict_mode) {
   CALL_HEAP_FUNCTION(object->GetIsolate(),
-                     object->SetPropertyWithInterceptor(*key,
-                                                        *value,
-                                                        attributes,
-                                                        strict_mode),
+                     object->SetPropertyWithInterceptorTaintCheck(*key,
+                                                                  *value,
+                                                                  attributes,
+                                                                  strict_mode),
                      Object);
 }
 
@@ -382,9 +382,9 @@ Handle<Object> GetPropertyWithInterceptor(Handle<JSObject> receiver,
                                           PropertyAttributes* attributes) {
   Isolate* isolate = receiver->GetIsolate();
   CALL_HEAP_FUNCTION(isolate,
-                     holder->GetPropertyWithInterceptor(*receiver,
-                                                        *name,
-                                                        attributes),
+                     holder->GetPropertyWithInterceptorTaintCheck(*receiver,
+                                                                  *name,
+                                                                  attributes),
                      Object);
 }
 
@@ -928,6 +928,11 @@ Handle<ObjectHashTable> PutIntoObjectHashTable(Handle<ObjectHashTable> table,
   CALL_HEAP_FUNCTION(table->GetIsolate(),
                      table->Put(*key, *value),
                      ObjectHashTable);
+}
+
+
+Handle<Object> Taint(Handle<Object> obj) {
+  CALL_HEAP_FUNCTION(ISOLATE, obj->Taint(), Object);
 }
 
 

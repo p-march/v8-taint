@@ -141,6 +141,11 @@ class JsonParser BASE_EMBEDDED {
   // it allow a terminal comma, like a JavaScript array does.
   Handle<Object> ParseJsonArray();
 
+  // Parses the tainted value which is identified with T(...)
+  // whatever object inside brackets, it will be reconstructed
+  // and tainted by the parser
+  Handle<Object> ParseJsonTaintedValue();
+
 
   // Mark that a parsing error has happened at the current token, and
   // return a null handle. Primarily for readability.
@@ -276,6 +281,8 @@ Handle<Object> JsonParser<seq_ascii>::ParseJsonValue() {
       return ParseJsonObject();
     case '[':
       return ParseJsonArray();
+    case 'T':
+      return ParseJsonTaintedValue();
     default:
       return ReportUnexpectedCharacter();
   }
@@ -411,6 +418,27 @@ Handle<Object> JsonParser<seq_ascii>::ParseJsonNumber() {
   }
   SkipWhitespace();
   return isolate()->factory()->NewNumber(number);
+}
+
+
+// Parse a JSON tainted value. Position must be right at 'T'.
+template <bool seq_ascii>
+Handle<Object> JsonParser<seq_ascii>::ParseJsonTaintedValue() {
+  Handle<Object> json_object;
+  ASSERT_EQ(c0_, 'T');
+  AdvanceSkipWhitespace();
+  if (c0_ != '(') {
+    return ReportUnexpectedCharacter();
+  }
+  AdvanceSkipWhitespace();
+  if (c0_ != ')') {
+    json_object = Taint(ParseJsonValue());
+    if (c0_ != ')') {
+      return ReportUnexpectedCharacter();
+    }
+  }
+  AdvanceSkipWhitespace();
+  return json_object;
 }
 
 

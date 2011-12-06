@@ -154,6 +154,36 @@ class Execution : public AllStatic {
   static Handle<Object> GetConstructorDelegate(Handle<Object> object);
   static Handle<Object> TryGetConstructorDelegate(Handle<Object> object,
                                                   bool* has_pending_exception);
+
+  // Checks taint policy for a particular object
+  // args[0] - type of operation ('get', 'set', 'call', 'construct'
+  // args[1] - holder (object the operation is being performed on)
+  // args[2] - name (for 'get'/'set' name of the method, for
+  // 'call'/construct' name of the function)
+  // args[3] - value 0 (argument to the operation)
+  // args[4] - value 1 (argument to the operation)
+  // ....
+  //
+  // If the return value is 'true' object, in case of 'get' the result
+  // of operation will be tainted, for other operations this means
+  // assert the operation. If the return value is 'false' object,
+  // do not taint the result of 'get' operations and do perform the
+  // 'call', 'set', 'construct' operations. The return value can be
+  // set to 'null' object, which enforces the default policy: do
+  // not taint the result of 'get' operation, and assert the
+  // 'set'/'call'/'construct' operation only if any of the
+  // arguments is tainted.
+  static Object* DoTaintPolicyCheck(Isolate* isolate,
+                                    Object* global,
+                                    Vector< Handle<Object> >& args,
+                                    bool* has_exceprtion);
+
+  static Failure* TaintPolicyCheck(Isolate* isolate,
+                                   Vector< Handle<Object> >& args,
+                                   bool* taint);
+
+  static Failure* TaintPolicyCheck(Isolate* isolate,
+                                   Vector< Handle<Object> >& args);
 };
 
 

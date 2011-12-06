@@ -263,6 +263,8 @@ class HGraph: public ZoneObject {
   HConstant* GetConstantMinus1();
   HConstant* GetConstantTrue();
   HConstant* GetConstantFalse();
+  HConstant* GetConstantTaintedTrue();
+  HConstant* GetConstantTaintedFalse();
   HConstant* GetConstantHole();
 
   HBasicBlock* CreateBasicBlock();

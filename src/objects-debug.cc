@@ -179,6 +179,9 @@ void HeapObject::HeapObjectVerify() {
     case FOREIGN_TYPE:
       Foreign::cast(this)->ForeignVerify();
       break;
+    case TAINTED_TYPE:
+      Tainted::cast(this)->TaintedVerify();
+      break;
     case SHARED_FUNCTION_INFO_TYPE:
       SharedFunctionInfo::cast(this)->SharedFunctionInfoVerify();
       break;
@@ -589,6 +592,12 @@ void JSFunctionProxy::JSFunctionProxyVerify() {
 
 void Foreign::ForeignVerify() {
   ASSERT(IsForeign());
+}
+
+
+void Tainted::TaintedVerify() {
+  ASSERT(IsTainted());
+  VerifyPointer(tainted_object());
 }
 
 

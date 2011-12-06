@@ -91,8 +91,15 @@ const STRING_TO_REGEXP_CACHE_ID = 0;
 # Note: We have special support for typeof(foo) === 'bar' in the compiler.
 #       It will *not* generate a runtime typeof call for the most important
 #       values of 'bar'.
-macro IS_NULL(arg)              = (arg === null);
-macro IS_NULL_OR_UNDEFINED(arg) = (arg == null);
+# TODO(petr): the use of UNTAINT() may be unsafe as we provide untainted value
+# possibly object, to be used in comparison operation with other object. This
+# may result in converting untainted object to string or default number and thus
+# invocation of toString() or valueOf() methods. These methods may be overloaded
+# and taint 'this' object again. Thus, the object will be tainted twice. Should not
+# be allowed.
+macro UNTAINT(arg)              = (%_IsTainted(arg) ? %GetTaintedObject(arg) : arg);
+macro IS_NULL(arg)              = (UNTAINT(arg) === null);
+macro IS_NULL_OR_UNDEFINED(arg) = (UNTAINT(arg) == null);
 macro IS_UNDEFINED(arg)         = (typeof(arg) === 'undefined');
 macro IS_NUMBER(arg)            = (typeof(arg) === 'number');
 macro IS_STRING(arg)            = (typeof(arg) === 'string');

@@ -76,6 +76,11 @@ void StaticNewSpaceVisitor<StaticVisitor>::Initialize() {
                   &JSObjectVisitor::
                       template VisitSpecialized<JSFunction::kSize>);
 
+  table_.Register(kVisitTainted,
+                  &FlexibleBodyVisitor<StaticVisitor,
+                                       Tainted::BodyDescriptor,
+                                       int>::Visit);
+
   table_.Register(kVisitFreeSpace, &VisitFreeSpace);
 
   table_.Register(kVisitJSWeakMap, &JSObjectVisitor::Visit);

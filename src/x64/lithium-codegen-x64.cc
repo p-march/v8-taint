@@ -1197,6 +1197,7 @@ void LCodeGen::DoValueOf(LValueOf* instr) {
   Register result = ToRegister(instr->result());
   ASSERT(input.is(result));
   Label done;
+  __ Untaint(input);
   // If the object is a smi return the object.
   __ JumpIfSmi(input, &done, Label::kNear);
 
@@ -1588,6 +1589,7 @@ Condition LCodeGen::EmitIsObject(Register input,
                                  Label* is_object) {
   ASSERT(!input.is(kScratchRegister));
 
+  __ Untaint(input);
   __ JumpIfSmi(input, is_not_object);
 
   __ CompareRoot(input, Heap::kNullValueRootIndex);
@@ -1720,9 +1722,16 @@ void LCodeGen::DoHasInstanceTypeAndBranch(LHasInstanceTypeAndBranch* instr) {
 
   Label* false_label = chunk_->GetAssemblyLabel(false_block);
 
-  __ JumpIfSmi(input, false_label);
-
-  __ CmpObjectType(input, TestType(instr->hydrogen()), kScratchRegister);
+  if (TestType(instr->hydrogen()) != TAINTED_TYPE) {
+    Register temp = ToRegister(instr->TempAt(0));
+    __ Untaint(temp, input);
+    __ JumpIfSmi(temp, false_label);
+    __ CmpObjectType(temp, TestType(instr->hydrogen()), kScratchRegister);
+  } else {
+    __ JumpIfSmi(input, false_label);
+    __ CmpObjectType(input, TestType(instr->hydrogen()), kScratchRegister);
+  }
+  
   EmitBranch(true_block, false_block, BranchCondition(instr->hydrogen()));
 }
 
@@ -1762,6 +1771,7 @@ void LCodeGen::EmitClassOfTest(Label* is_true,
                                Register input,
                                Register temp,
                                Register scratch) {
+  __ Untaint(input);
   __ JumpIfSmi(input, is_false);
 
   if (class_name->IsEqualTo(CStrVector("Function"))) {
@@ -4122,6 +4132,7 @@ Condition LCodeGen::EmitTypeofIs(Label* true_label,
                                  Register input,
                                  Handle<String> type_name) {
   Condition final_branch_condition = no_condition;
+  __ Untaint(input);
   if (type_name->Equals(heap()->number_symbol())) {
     __ JumpIfSmi(input, true_label);
     __ CompareRoot(FieldOperand(input, HeapObject::kMapOffset),

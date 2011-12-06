@@ -1266,14 +1266,15 @@ void LCodeGen::DoElementsKind(LElementsKind* instr) {
 void LCodeGen::DoValueOf(LValueOf* instr) {
   Register input = ToRegister(instr->InputAt(0));
   Register result = ToRegister(instr->result());
-  Register map = ToRegister(instr->TempAt(0));
+  Register temp = ToRegister(instr->TempAt(0));
   ASSERT(input.is(result));
   Label done;
+  __ Untaint(input, temp);
   // If the object is a smi return the object.
   __ JumpIfSmi(input, &done, Label::kNear);
 
   // If the object is not a value type, return the object.
-  __ CmpObjectType(input, JS_VALUE_TYPE, map);
+  __ CmpObjectType(input, JS_VALUE_TYPE, temp);
   __ j(not_equal, &done, Label::kNear);
   __ mov(result, FieldOperand(input, JSValue::kValueOffset));
 
@@ -1657,6 +1658,7 @@ Condition LCodeGen::EmitIsObject(Register input,
                                  Register temp1,
                                  Label* is_not_object,
                                  Label* is_object) {
+  __ Untaint(input, temp1);
   __ JumpIfSmi(input, is_not_object);
 
   __ cmp(input, isolate()->factory()->null_value());
@@ -1807,6 +1809,7 @@ void LCodeGen::DoHasInstanceTypeAndBranch(LHasInstanceTypeAndBranch* instr) {
 
   Label* false_label = chunk_->GetAssemblyLabel(false_block);
 
+  __ Untaint(input, temp);
   __ JumpIfSmi(input, false_label);
 
   __ CmpObjectType(input, TestType(instr->hydrogen()), temp);
@@ -1850,6 +1853,7 @@ void LCodeGen::EmitClassOfTest(Label* is_true,
                                Register temp2) {
   ASSERT(!input.is(temp));
   ASSERT(!temp.is(temp2));  // But input and temp2 may be the same register.
+  __ Untaint(input, temp);
   __ JumpIfSmi(input, is_false);
 
   if (class_name->IsEqualTo(CStrVector("Function"))) {
@@ -4374,13 +4378,14 @@ void LCodeGen::DoTypeof(LTypeof* instr) {
 
 void LCodeGen::DoTypeofIsAndBranch(LTypeofIsAndBranch* instr) {
   Register input = ToRegister(instr->InputAt(0));
+  Register temp = ToRegister(instr->TempAt(0));
   int true_block = chunk_->LookupDestination(instr->true_block_id());
   int false_block = chunk_->LookupDestination(instr->false_block_id());
   Label* true_label = chunk_->GetAssemblyLabel(true_block);
   Label* false_label = chunk_->GetAssemblyLabel(false_block);
 
   Condition final_branch_condition =
-      EmitTypeofIs(true_label, false_label, input, instr->type_literal());
+      EmitTypeofIs(true_label, false_label, input, temp, instr->type_literal());
   if (final_branch_condition != no_condition) {
     EmitBranch(true_block, false_block, final_branch_condition);
   }
@@ -4390,8 +4395,10 @@ void LCodeGen::DoTypeofIsAndBranch(LTypeofIsAndBranch* instr) {
 Condition LCodeGen::EmitTypeofIs(Label* true_label,
                                  Label* false_label,
                                  Register input,
+                                 Register temp,
                                  Handle<String> type_name) {
   Condition final_branch_condition = no_condition;
+  __ Untaint(input, temp);
   if (type_name->Equals(heap()->number_symbol())) {
     __ JumpIfSmi(input, true_label);
     __ cmp(FieldOperand(input, HeapObject::kMapOffset),

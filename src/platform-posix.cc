@@ -89,13 +89,20 @@ void OS::Guard(void* address, const size_t size) {
 #endif  // __CYGWIN__
 
 
-void* OS::GetRandomMmapAddr() {
+// CLEAN(petr): remove size from this function
+void* OS::GetRandomMmapAddr(size_t size) {
   Isolate* isolate = Isolate::UncheckedCurrent();
   // Note that the current isolate isn't set up in a call path via
   // CpuFeatures::Probe. We don't care about randomization in this case because
   // the code page is immediately freed.
   if (isolate != NULL) {
 #ifdef V8_TARGET_ARCH_X64
+#if 1
+    // CLEAN(petr)
+    static uint64_t start = 0x20000000;
+    uint64_t raw_addr = start;
+    start += size;
+#else
     uint64_t rnd1 = V8::RandomPrivate(isolate);
     uint64_t rnd2 = V8::RandomPrivate(isolate);
     uint64_t raw_addr = (rnd1 << 32) ^ rnd2;
@@ -103,6 +110,7 @@ void* OS::GetRandomMmapAddr() {
     // the hint address to 46 bits to give the kernel a fighting chance of
     // fulfilling our placement request.
     raw_addr &= V8_UINT64_C(0x3ffffffff000);
+#endif
 #else
     uint32_t raw_addr = V8::RandomPrivate(isolate);
     // The range 0x20000000 - 0x60000000 is relatively unpopulated across a

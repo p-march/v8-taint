@@ -277,24 +277,35 @@ function BasicJSONSerialize(key, value, stack, builder) {
       value = %_CallFunction(value, ToString(key), toJSON);
     }
   }
+  var is_tainted = %_IsTainted(value);
+  var result;
   if (IS_STRING(value)) {
-    builder.push(value !== "" ? %QuoteJSONString(value) : '""');
+    result = value !== "" ? %QuoteJSONString(value) : '""';
+    if (is_tainted && !%_IsTainted(result)) result = %Taint(result);
+    builder.push(is_tainted ? "T(" + result + ")" : result);
   } else if (IS_NUMBER(value)) {
-    builder.push(JSON_NUMBER_TO_STRING(value));
+    result = JSON_NUMBER_TO_STRING(value);
+    builder.push(is_tainted ? "T(" + result + ")" : result);
   } else if (IS_BOOLEAN(value)) {
-    builder.push(value ? "true" : "false");
+    result = value ? "true" : "false";
+    if (is_tainted && !%_IsTainted(result)) result = %Taint(result);
+    builder.push(is_tainted ? "T(" + result + ")" : result);
   } else if (IS_NULL(value)) {
-    builder.push("null");
+    builder.push(is_tainted ? %Taint("T(null)") : "null");
   } else if (IS_SPEC_OBJECT(value) && !(typeof value == "function")) {
     // Value is a non-callable object.
     // Unwrap value if necessary
     if (IS_NUMBER_WRAPPER(value)) {
       value = ToNumber(value);
-      builder.push(JSON_NUMBER_TO_STRING(value));
+      result = JSON_NUMBER_TO_STRING(value);
+      builder.push(is_tainted ? "T(" + result + ")" : result);
     } else if (IS_STRING_WRAPPER(value)) {
-      builder.push(%QuoteJSONString(ToString(value)));
+      result = %QuoteJSONString(ToString(value));
+      builder.push(is_tainted ? "T(" + result + ")" : result);
     } else if (IS_BOOLEAN_WRAPPER(value)) {
-      builder.push(%_ValueOf(value) ? "true" : "false");
+      result = %_ValueOf(value) ? "true" : "false";
+      if (is_tainted && !%_IsTainted(result)) result = %Taint(result);
+      builder.push(is_tainted ? "T(" + result + ")" : result);
     } else if (IS_ARRAY(value)) {
       BasicSerializeArray(value, stack, builder);
     } else {

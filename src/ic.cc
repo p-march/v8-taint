@@ -557,13 +557,20 @@ bool CallICBase::TryUpdateExtraICState(LookupResult* lookup,
     case kStringCharAt:
       if (object->IsString()) {
         String* string = String::cast(*object);
+        Object* arg1 = args[0];
+        Object* arg2 = NULL;
+        UNTAINT(arg1);
+        if (argc >=1) {
+          arg2 = args[1];
+          UNTAINT(arg2);
+        }
         // Check there's the right string value or wrapper in the receiver slot.
-        ASSERT(string == args[0] || string == JSValue::cast(args[0])->value());
+        ASSERT(string == arg1 || string == JSValue::cast(arg1)->value());
         // If we're in the default (fastest) state and the index is
         // out of bounds, update the state to record this fact.
         if (StringStubState::decode(*extra_ic_state) == DEFAULT_STRING_STUB &&
-            argc >= 1 && args[1]->IsNumber()) {
-          double index = DoubleToInteger(args.number_at(1));
+            argc >= 1 && arg2->IsNumber()) {
+          double index = DoubleToInteger(arg2->Number());
           if (index < 0 || index >= string->length()) {
             *extra_ic_state =
                 StringStubState::update(*extra_ic_state,
@@ -625,6 +632,7 @@ Handle<Code> CallICBase::ComputeMonomorphicStub(LookupResult* lookup,
       break;
     }
     case INTERCEPTOR:
+      if (FLAG_taint_policy) return  Handle<Code>::null();
       ASSERT(HasInterceptorGetter(*holder));
       return isolate()->stub_cache()->ComputeCallInterceptor(
           argc, kind_, extra_state, name, object, holder);
@@ -933,6 +941,7 @@ void LoadIC::UpdateCaches(LookupResult* lookup,
         }
         break;
       case CALLBACKS: {
+        if (FLAG_taint_policy) return;
         Handle<Object> callback_object(lookup->GetCallbackObject());
         if (!callback_object->IsAccessorInfo()) return;
         Handle<AccessorInfo> callback =
@@ -943,6 +952,7 @@ void LoadIC::UpdateCaches(LookupResult* lookup,
         break;
       }
       case INTERCEPTOR:
+        if (FLAG_taint_policy) return;
         ASSERT(HasInterceptorGetter(*holder));
         code = isolate()->stub_cache()->ComputeLoadInterceptor(
             name, receiver, holder);
@@ -1169,6 +1179,10 @@ void KeyedLoadIC::UpdateCaches(LookupResult* lookup,
         break;
       }
       case CALLBACKS: {
+        if (FLAG_taint_policy) {
+          code = generic_stub();
+          break;
+        }
         Handle<Object> callback_object(lookup->GetCallbackObject());
         if (!callback_object->IsAccessorInfo()) return;
         Handle<AccessorInfo> callback =
@@ -1179,6 +1193,10 @@ void KeyedLoadIC::UpdateCaches(LookupResult* lookup,
         break;
       }
       case INTERCEPTOR:
+        if (FLAG_taint_policy) {
+          code = generic_stub();
+          break;
+        }
         ASSERT(HasInterceptorGetter(lookup->holder()));
         code = isolate()->stub_cache()->ComputeKeyedLoadInterceptor(
             name, receiver, holder);
@@ -1377,6 +1395,7 @@ void StoreIC::UpdateCaches(LookupResult* lookup,
       }
       break;
     case CALLBACKS: {
+      if (FLAG_taint_policy) return;
       Handle<Object> callback_object(lookup->GetCallbackObject());
       if (!callback_object->IsAccessorInfo()) return;
       Handle<AccessorInfo> callback =
@@ -1387,6 +1406,7 @@ void StoreIC::UpdateCaches(LookupResult* lookup,
       break;
     }
     case INTERCEPTOR:
+      if (FLAG_taint_policy) return;
       ASSERT(!receiver->GetNamedInterceptor()->setter()->IsUndefined());
       code = isolate()->stub_cache()->ComputeStoreInterceptor(
           name, receiver, strict_mode);
@@ -1785,6 +1805,7 @@ void KeyedStoreIC::UpdateCaches(LookupResult* lookup,
 
 // Used from ic-<arch>.cc.
 RUNTIME_FUNCTION(MaybeObject*, CallIC_Miss) {
+  UNTAINT_ALL_ARGS();
   HandleScope scope(isolate);
   ASSERT(args.length() == 2);
   CallIC ic(isolate);
@@ -1813,6 +1834,7 @@ RUNTIME_FUNCTION(MaybeObject*, CallIC_Miss) {
 
 // Used from ic-<arch>.cc.
 RUNTIME_FUNCTION(MaybeObject*, KeyedCallIC_Miss) {
+  ASSERT_IF_TAINTED_ARGS();
   HandleScope scope(isolate);
   ASSERT(args.length() == 2);
   KeyedCallIC ic(isolate);
@@ -1833,6 +1855,10 @@ RUNTIME_FUNCTION(MaybeObject*, KeyedCallIC_Miss) {
 
 // Used from ic-<arch>.cc.
 RUNTIME_FUNCTION(MaybeObject*, LoadIC_Miss) {
+  // TAINT(petr): we should have a policy hook if the object is tainted
+  // as here we have an access to a member of the tainted object and the
+  // policy should decide what to do with the result of operation
+  UNTAINT_ALL_ARGS();
   HandleScope scope(isolate);
   ASSERT(args.length() == 2);
   LoadIC ic(isolate);
@@ -1843,6 +1869,7 @@ RUNTIME_FUNCTION(MaybeObject*, LoadIC_Miss) {
 
 // Used from ic-<arch>.cc
 RUNTIME_FUNCTION(MaybeObject*, KeyedLoadIC_Miss) {
+  UNTAINT_ALL_ARGS();
   HandleScope scope(isolate);
   ASSERT(args.length() == 2);
   KeyedLoadIC ic(isolate);
@@ -1852,6 +1879,7 @@ RUNTIME_FUNCTION(MaybeObject*, KeyedLoadIC_Miss) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, KeyedLoadIC_MissForceGeneric) {
+  ASSERT_IF_TAINTED_ARGS();
   HandleScope scope(isolate);
   ASSERT(args.length() == 2);
   KeyedLoadIC ic(isolate);
@@ -1862,6 +1890,7 @@ RUNTIME_FUNCTION(MaybeObject*, KeyedLoadIC_MissForceGeneric) {
 
 // Used from ic-<arch>.cc.
 RUNTIME_FUNCTION(MaybeObject*, StoreIC_Miss) {
+  UNTAINT_ARGS(2); // do not untaint value
   HandleScope scope;
   ASSERT(args.length() == 3);
   StoreIC ic(isolate);
@@ -1876,6 +1905,7 @@ RUNTIME_FUNCTION(MaybeObject*, StoreIC_Miss) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, StoreIC_ArrayLength) {
+  ASSERT_IF_TAINTED_ARGS();
   NoHandleAllocation nha;
 
   ASSERT(args.length() == 2);
@@ -1897,6 +1927,7 @@ RUNTIME_FUNCTION(MaybeObject*, StoreIC_ArrayLength) {
 // it is necessary to extend the properties array of a
 // JSObject.
 RUNTIME_FUNCTION(MaybeObject*, SharedStoreIC_ExtendStorage) {
+  ASSERT_IF_TAINTED_ARGS();
   NoHandleAllocation na;
   ASSERT(args.length() == 3);
 
@@ -1931,6 +1962,7 @@ RUNTIME_FUNCTION(MaybeObject*, SharedStoreIC_ExtendStorage) {
 
 // Used from ic-<arch>.cc.
 RUNTIME_FUNCTION(MaybeObject*, KeyedStoreIC_Miss) {
+  UNTAINT_ARGS(2);  // do not untaint value
   HandleScope scope(isolate);
   ASSERT(args.length() == 3);
   KeyedStoreIC ic(isolate);
@@ -1946,6 +1978,7 @@ RUNTIME_FUNCTION(MaybeObject*, KeyedStoreIC_Miss) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, KeyedStoreIC_Slow) {
+  ASSERT_IF_TAINTED_ARGS();
   NoHandleAllocation na;
   ASSERT(args.length() == 3);
   KeyedStoreIC ic(isolate);
@@ -1965,6 +1998,8 @@ RUNTIME_FUNCTION(MaybeObject*, KeyedStoreIC_Slow) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, KeyedStoreIC_MissForceGeneric) {
+  ASSERT_IF_TAINTED_ARG(0);
+  ASSERT_IF_TAINTED_ARG(1);
   HandleScope scope(isolate);
   ASSERT(args.length() == 3);
   KeyedStoreIC ic(isolate);
@@ -2136,6 +2171,7 @@ BinaryOpIC::TypeInfo BinaryOpIC::GetTypeInfo(Handle<Object> left,
 
 
 RUNTIME_FUNCTION(MaybeObject*, UnaryOp_Patch) {
+  UNTAINT_ALL_ARGS();
   ASSERT(args.length() == 4);
 
   HandleScope scope(isolate);
@@ -2183,10 +2219,11 @@ RUNTIME_FUNCTION(MaybeObject*, UnaryOp_Patch) {
   if (caught_exception) {
     return Failure::Exception();
   }
-  return *result;
+  TAINT_RETURN(*result);
 }
 
 RUNTIME_FUNCTION(MaybeObject*, BinaryOp_Patch) {
+  UNTAINT_ALL_ARGS();
   ASSERT(args.length() == 5);
 
   HandleScope scope(isolate);
@@ -2296,7 +2333,7 @@ RUNTIME_FUNCTION(MaybeObject*, BinaryOp_Patch) {
   if (caught_exception) {
     return Failure::Exception();
   }
-  return *result;
+  TAINT_RETURN(*result);
 }
 
 
@@ -2353,6 +2390,7 @@ CompareIC::State CompareIC::TargetState(State state,
 
 // Used from ic_<arch>.cc.
 RUNTIME_FUNCTION(Code*, CompareIC_Miss) {
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation na;
   ASSERT(args.length() == 3);
   CompareIC ic(isolate, static_cast<Token::Value>(args.smi_at(2)));
@@ -2362,6 +2400,7 @@ RUNTIME_FUNCTION(Code*, CompareIC_Miss) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, ToBoolean_Patch) {
+  UNTAINT_ALL_ARGS();
   ASSERT(args.length() == 3);
 
   HandleScope scope(isolate);
@@ -2377,6 +2416,10 @@ RUNTIME_FUNCTION(MaybeObject*, ToBoolean_Patch) {
   Handle<Code> code = stub.GetCode();
   ToBooleanIC ic(isolate);
   ic.patch(*code);
+
+  // TODO(petr): the result should be tainted for implicit information
+  // control; however, this will break "if" and "?" statements as they
+  // expect integers as input but not tainted values
   return Smi::FromInt(to_boolean_value ? 1 : 0);
 }
 

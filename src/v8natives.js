@@ -222,10 +222,10 @@ $Object.prototype.constructor = $Object;
 // ECMA-262 - 15.2.4.2
 function ObjectToString() {
   if (IS_UNDEFINED(this) && !IS_UNDETECTABLE(this)) {
-    return '[object Undefined]';
+    return %CondTaint(this, '[object Undefined]');
   }
-  if (IS_NULL(this)) return '[object Null]';
-  return "[object " + %_ClassOf(ToObject(this)) + "]";
+  if (IS_NULL(this)) return %CondTaint(this, '[object Null]');
+  return %CondTaint(this, "[object " + %_ClassOf(ToObject(this)) + "]");
 }
 
 
@@ -1324,7 +1324,7 @@ function BooleanToString() {
     }
     b = %_ValueOf(b);
   }
-  return b ? 'true' : 'false';
+  return %CondTaint(b, b ? 'true' : 'false');
 }
 
 
@@ -1535,7 +1535,7 @@ function FunctionSourceString(func) {
       // Mimic what KJS does.
       return 'function ' + name + '() { [native code] }';
     } else {
-      return 'function () { [native code] }';
+      return %CondTaint(func, 'function () { [native code] }');
     }
   }
 

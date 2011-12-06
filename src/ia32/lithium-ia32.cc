@@ -1563,7 +1563,7 @@ LInstruction* LChunkBuilder::DoHasInstanceTypeAndBranch(
     HHasInstanceTypeAndBranch* instr) {
   ASSERT(instr->value()->representation().IsTagged());
   return new(zone()) LHasInstanceTypeAndBranch(
-      UseRegisterAtStart(instr->value()),
+      UseRegister(instr->value()),
       TempRegister());
 }
 
@@ -2294,7 +2294,8 @@ LInstruction* LChunkBuilder::DoTypeof(HTypeof* instr) {
 
 
 LInstruction* LChunkBuilder::DoTypeofIsAndBranch(HTypeofIsAndBranch* instr) {
-  return new(zone()) LTypeofIsAndBranch(UseTempRegister(instr->value()));
+  return new(zone()) LTypeofIsAndBranch(UseTempRegister(instr->value()),
+                                        TempRegister());
 }
 
 

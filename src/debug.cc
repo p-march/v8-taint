@@ -1037,6 +1037,7 @@ Object* Debug::Break(Arguments args) {
 
 
 RUNTIME_FUNCTION(Object*, Debug_Break) {
+  ASSERT_IF_TAINTED_ARGS();
   return isolate->debug()->Break(args);
 }
 

@@ -34,7 +34,7 @@
 
 // Set the String function and constructor.
 %SetCode($String, function(x) {
-  var value = %_ArgumentsLength() == 0 ? '' : TO_STRING_INLINE(x);
+  var value = %_ArgumentsLength() == 0 ? %CondTaint(x, '') : TO_STRING_INLINE(x);
   if (%_IsConstructCall()) {
     %_SetValueOf(this, value);
   } else {
@@ -62,15 +62,19 @@ function StringValueOf() {
 }
 
 
+function __StringCharAt(str, pos) {
+  return %_StringCharAt(str, pos);
+}
+
 // ECMA-262, section 15.5.4.4
 function StringCharAt(pos) {
   if (IS_NULL_OR_UNDEFINED(this) && !IS_UNDETECTABLE(this)) {
     throw MakeTypeError("called_on_null_or_undefined",
                         ["String.prototype.charAt"]);
   }
-  var result = %_StringCharAt(this, pos);
+  var result = %WrapTaint(__StringCharAt, this, pos);
   if (%_IsSmi(result)) {
-    result = %_StringCharAt(TO_STRING_INLINE(this), TO_INTEGER(pos));
+    result = %WrapTaint(__StringCharAt, TO_STRING_INLINE(this), TO_INTEGER(pos));
   }
   return result;
 }
@@ -82,9 +86,11 @@ function StringCharCodeAt(pos) {
     throw MakeTypeError("called_on_null_or_undefined",
                         ["String.prototype.charCodeAt"]);
   }
-  var result = %_StringCharCodeAt(this, pos);
+  var result = %_IsTainted(this) ? %StringCharCodeAt(this, pos) :
+    %_StringCharCodeAt(this, pos);
   if (!%_IsSmi(result)) {
-    result = %_StringCharCodeAt(TO_STRING_INLINE(this), TO_INTEGER(pos));
+    result = %_IsTainted(this) ? %StringCharCodeAt(TO_STRING_INLINE(this), TO_INTEGER(pos)) :
+      %_StringCharCodeAt(TO_STRING_INLINE(this), TO_INTEGER(pos));
   }
   return result;
 }
@@ -202,6 +208,9 @@ function StringMatch(regexp) {
 // otherwise we call the runtime system.
 function SubString(string, start, end) {
   // Use the one character string cache.
+  if (%_IsTainted(string) || %_IsTainted(start) || %_IsTainted(end)) {
+    return %SubString(string, start, end);
+  }
   if (start + 1 == end) return %_StringCharAt(string, start);
   return %_SubString(string, start, end);
 }
@@ -701,9 +710,13 @@ function StringSubstring(start, end) {
     }
   }
 
-  return ((start_i + 1 == end_i)
-          ? %_StringCharAt(s, start_i)
-          : %_SubString(s, start_i, end_i));
+  if (%_IsTainted(s) || %_IsTainted(start_i) || %_IsTainted(end_i)) {
+    return %SubString(s, start_i, end_i);
+  } else {
+    return (start_i + 1 == end_i
+            ? %_StringCharAt(s, start_i)
+            : %_SubString(s, start_i, end_i));
+  }
 }
 
 

@@ -2346,6 +2346,7 @@ void FullCodeGenerator::EmitIsSmi(CallRuntime* expr) {
                          &if_true, &if_false, &fall_through);
 
   PrepareForBailoutBeforeSplit(expr, true, if_true, if_false);
+  __ Untaint(eax, ebx);
   __ test(eax, Immediate(kSmiTagMask));
   Split(zero, if_true, if_false, fall_through);
 
@@ -2367,6 +2368,7 @@ void FullCodeGenerator::EmitIsNonNegativeSmi(CallRuntime* expr) {
                          &if_true, &if_false, &fall_through);
 
   PrepareForBailoutBeforeSplit(expr, true, if_true, if_false);
+  __ Untaint(eax, ebx);
   __ test(eax, Immediate(kSmiTagMask | 0x80000000));
   Split(zero, if_true, if_false, fall_through);
 
@@ -2387,6 +2389,7 @@ void FullCodeGenerator::EmitIsObject(CallRuntime* expr) {
   context()->PrepareTest(&materialize_true, &materialize_false,
                          &if_true, &if_false, &fall_through);
 
+  __ Untaint(eax, ebx);
   __ JumpIfSmi(eax, if_false);
   __ cmp(eax, isolate()->factory()->null_value());
   __ j(equal, if_true);
@@ -2419,6 +2422,7 @@ void FullCodeGenerator::EmitIsSpecObject(CallRuntime* expr) {
   context()->PrepareTest(&materialize_true, &materialize_false,
                          &if_true, &if_false, &fall_through);
 
+  __ Untaint(eax, ebx);
   __ JumpIfSmi(eax, if_false);
   __ CmpObjectType(eax, FIRST_SPEC_OBJECT_TYPE, ebx);
   PrepareForBailoutBeforeSplit(expr, true, if_true, if_false);
@@ -2441,6 +2445,7 @@ void FullCodeGenerator::EmitIsUndetectableObject(CallRuntime* expr) {
   context()->PrepareTest(&materialize_true, &materialize_false,
                          &if_true, &if_false, &fall_through);
 
+  __ Untaint(eax, ebx);
   __ JumpIfSmi(eax, if_false);
   __ mov(ebx, FieldOperand(eax, HeapObject::kMapOffset));
   __ movzx_b(ebx, FieldOperand(ebx, Map::kBitFieldOffset));
@@ -2468,6 +2473,7 @@ void FullCodeGenerator::EmitIsStringWrapperSafeForDefaultValueOf(
 
   if (FLAG_debug_code) __ AbortIfSmi(eax);
 
+  __ Untaint(eax, ebx);
   // Check whether this map has already been checked to be safe for default
   // valueOf.
   __ mov(ebx, FieldOperand(eax, HeapObject::kMapOffset));
@@ -2549,6 +2555,7 @@ void FullCodeGenerator::EmitIsFunction(CallRuntime* expr) {
   context()->PrepareTest(&materialize_true, &materialize_false,
                          &if_true, &if_false, &fall_through);
 
+  __ Untaint(eax, ebx);
   __ JumpIfSmi(eax, if_false);
   __ CmpObjectType(eax, JS_FUNCTION_TYPE, ebx);
   PrepareForBailoutBeforeSplit(expr, true, if_true, if_false);
@@ -2571,6 +2578,7 @@ void FullCodeGenerator::EmitIsArray(CallRuntime* expr) {
   context()->PrepareTest(&materialize_true, &materialize_false,
                          &if_true, &if_false, &fall_through);
 
+  __ Untaint(eax, ebx);
   __ JumpIfSmi(eax, if_false);
   __ CmpObjectType(eax, JS_ARRAY_TYPE, ebx);
   PrepareForBailoutBeforeSplit(expr, true, if_true, if_false);
@@ -2593,6 +2601,7 @@ void FullCodeGenerator::EmitIsRegExp(CallRuntime* expr) {
   context()->PrepareTest(&materialize_true, &materialize_false,
                          &if_true, &if_false, &fall_through);
 
+  __ Untaint(eax, ebx);
   __ JumpIfSmi(eax, if_false);
   __ CmpObjectType(eax, JS_REGEXP_TYPE, ebx);
   PrepareForBailoutBeforeSplit(expr, true, if_true, if_false);
@@ -2634,6 +2643,28 @@ void FullCodeGenerator::EmitIsConstructCall(CallRuntime* expr) {
 }
 
 
+void FullCodeGenerator::EmitIsTainted(CallRuntime* expr) {
+  ZoneList<Expression*>* args = expr->arguments();
+  ASSERT(args->length() == 1);
+
+  VisitForAccumulatorValue(args->at(0));
+
+  Label materialize_true, materialize_false;
+  Label* if_true = NULL;
+  Label* if_false = NULL;
+  Label* fall_through = NULL;
+  context()->PrepareTest(&materialize_true, &materialize_false,
+                         &if_true, &if_false, &fall_through);
+
+  __ JumpIfSmi(eax, if_false);
+  __ CmpObjectType(eax, TAINTED_TYPE, ebx);
+  PrepareForBailoutBeforeSplit(TOS_REG, true, if_true, if_false);
+  Split(equal, if_true, if_false, fall_through);
+
+  context()->Plug(if_true, if_false);
+}
+
+
 void FullCodeGenerator::EmitObjectEquals(CallRuntime* expr) {
   ZoneList<Expression*>* args = expr->arguments();
   ASSERT(args->length() == 2);
@@ -2649,7 +2680,9 @@ void FullCodeGenerator::EmitObjectEquals(CallRuntime* expr) {
   context()->PrepareTest(&materialize_true, &materialize_false,
                          &if_true, &if_false, &fall_through);
 
+  __ Untaint(eax, ebx);
   __ pop(ebx);
+  __ Untaint(ebx, ecx);
   __ cmp(eax, ebx);
   PrepareForBailoutBeforeSplit(expr, true, if_true, if_false);
   Split(equal, if_true, if_false, fall_through);
@@ -2703,6 +2736,7 @@ void FullCodeGenerator::EmitClassOf(CallRuntime* expr) {
 
   VisitForAccumulatorValue(args->at(0));
 
+  __ Untaint(eax, ebx);
   // If the object is a smi, we return null.
   __ JumpIfSmi(eax, &null);
 
@@ -2863,6 +2897,7 @@ void FullCodeGenerator::EmitValueOf(CallRuntime* expr) {
   VisitForAccumulatorValue(args->at(0));  // Load the object.
 
   Label done;
+  __ Untaint(eax, ebx);
   // If the object is a smi return the object.
   __ JumpIfSmi(eax, &done, Label::kNear);
   // If the object is not a value type, return the object.
@@ -3372,6 +3407,8 @@ void FullCodeGenerator::EmitHasCachedArrayIndex(CallRuntime* expr) {
   Label* fall_through = NULL;
   context()->PrepareTest(&materialize_true, &materialize_false,
                          &if_true, &if_false, &fall_through);
+  // NOTE(petr): force to go slow-path
+  __ JumpIfTainted(eax, ebx, if_false);
 
   __ test(FieldOperand(eax, String::kHashFieldOffset),
           Immediate(String::kContainsCachedArrayIndexMask));
@@ -4087,6 +4124,7 @@ void FullCodeGenerator::EmitLiteralCompareTypeof(Expression* expr,
     VisitForTypeofValue(sub_expr);
   }
   PrepareForBailoutBeforeSplit(expr, true, if_true, if_false);
+  __ Untaint(eax, ebx);
 
   if (check->Equals(isolate()->heap()->number_symbol())) {
     __ JumpIfSmi(eax, if_true);

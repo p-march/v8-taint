@@ -655,10 +655,10 @@ class DictionaryElementsAccessor
       Object* element = backing_store->ValueAt(entry);
       PropertyDetails details = backing_store->DetailsAt(entry);
       if (details.type() == CALLBACKS) {
-        return obj->GetElementWithCallback(receiver,
-                                           element,
-                                           key,
-                                           obj);
+        return obj->GetElementWithCallbackTaintCheck(receiver,
+                                                     element,
+                                                     key,
+                                                     obj);
       } else {
         return element;
       }

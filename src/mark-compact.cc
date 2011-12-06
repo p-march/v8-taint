@@ -831,6 +831,11 @@ class StaticMarkingVisitor : public StaticVisitorBase {
                                       JSGlobalPropertyCell::BodyDescriptor,
                                       void>::Visit);
 
+    table_.Register(kVisitTainted,
+                    &FlexibleBodyVisitor<StaticMarkingVisitor,
+                                         Tainted::BodyDescriptor,
+                                         void>::Visit);
+
     table_.RegisterSpecializations<DataObjectVisitor,
                                    kVisitDataObject,
                                    kVisitDataObjectGeneric>();

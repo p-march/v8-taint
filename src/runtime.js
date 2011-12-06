@@ -50,6 +50,43 @@ const $Boolean = global.Boolean;
 const $NaN = 0/0;
 const builtins = this;
 
+function CondTaint(x, val) {
+  if (%_IsTainted(x)) {
+    return %Taint(val);
+  } else {
+    return val;
+  }
+}
+
+function CondTaint2(x, y, val) {
+  if (%_IsTainted(x) || %_IsTainted(y)) {
+    return %Taint(val);
+  } else {
+    return val;
+  }
+}
+
+function WrapTaint(func, arg1, arg2) {
+  var tainted = false;
+
+  if (%_IsTainted(arg1)) {
+    arg1 = %GetTaintedObject(arg1);
+    tainted = true;
+  }
+
+  if (%_IsTainted(arg2)) {
+    arg2 = %GetTaintedObject(arg2);
+    tainted = true;
+  }
+
+  var result = func(arg1, arg2); 
+  return tainted ? %Taint(result) : result;
+}
+
+function ArgsTainted(arg1, arg2) {
+  return %_IsTainted(arg1) || %_IsTainted(arg2) ? true : false;
+}
+
 // ECMA-262 Section 11.9.3.
 function EQUALS(y) {
   if (IS_STRING(this) && IS_STRING(y)) return %StringEquals(this, y);
@@ -272,7 +309,7 @@ function BIT_AND(y) {
     // Optimize for the case where we end up AND'ing a value
     // that doesn't convert to a number. This is common in
     // certain benchmarks.
-    if (NUMBER_IS_NAN(x)) return 0;
+    if (NUMBER_IS_NAN(x)) return %CondTaint2(x, y, 0);
   }
   return %NumberAnd(x, y);
 }
@@ -324,7 +361,7 @@ function SAR(y) {
     // Optimize for the case where we end up shifting a value
     // that doesn't convert to a number. This is common in
     // certain benchmarks.
-    if (NUMBER_IS_NAN(x)) return 0;
+    if (NUMBER_IS_NAN(x)) return %CondTaint2(x, y, 0);
   }
   return %NumberSar(x, y);
 }
@@ -516,10 +553,10 @@ function ToPrimitive(x, hint) {
 // ECMA-262, section 9.2, page 30
 function ToBoolean(x) {
   if (IS_BOOLEAN(x)) return x;
-  if (IS_STRING(x)) return x.length != 0;
-  if (x == null) return false;
-  if (IS_NUMBER(x)) return !((x == 0) || NUMBER_IS_NAN(x));
-  return true;
+  if (IS_STRING(x)) return %CondTaint(x, x.length != 0);
+  if (x == null) return %CondTaint(x, false);
+  if (IS_NUMBER(x)) return %CondTaint(x, !((x == 0) || NUMBER_IS_NAN(x)));
+  return %CondTaint(x, true);
 }
 
 
@@ -530,9 +567,9 @@ function ToNumber(x) {
     return %_HasCachedArrayIndex(x) ? %_GetCachedArrayIndex(x)
                                     : %StringToNumber(x);
   }
-  if (IS_BOOLEAN(x)) return x ? 1 : 0;
-  if (IS_UNDEFINED(x)) return $NaN;
-  return (IS_NULL(x)) ? 0 : ToNumber(%DefaultNumber(x));
+  if (IS_BOOLEAN(x)) return %CondTaint(x, x ? 1 : 0);
+  if (IS_UNDEFINED(x)) return %CondTaint(x, $NaN);
+  return (IS_NULL(x)) ? %CondTaint(x, 0) : ToNumber(%DefaultNumber(x));
 }
 
 function NonNumberToNumber(x) {
@@ -540,9 +577,9 @@ function NonNumberToNumber(x) {
     return %_HasCachedArrayIndex(x) ? %_GetCachedArrayIndex(x)
                                     : %StringToNumber(x);
   }
-  if (IS_BOOLEAN(x)) return x ? 1 : 0;
-  if (IS_UNDEFINED(x)) return $NaN;
-  return (IS_NULL(x)) ? 0 : ToNumber(%DefaultNumber(x));
+  if (IS_BOOLEAN(x)) return %CondTaint(x, x ? 1 : 0);
+  if (IS_UNDEFINED(x)) return %CondTaint(x, $NaN);
+  return (IS_NULL(x)) ? %CondTaint(x, 0) : ToNumber(%DefaultNumber(x));
 }
 
 
@@ -550,24 +587,24 @@ function NonNumberToNumber(x) {
 function ToString(x) {
   if (IS_STRING(x)) return x;
   if (IS_NUMBER(x)) return %_NumberToString(x);
-  if (IS_BOOLEAN(x)) return x ? 'true' : 'false';
-  if (IS_UNDEFINED(x)) return 'undefined';
-  return (IS_NULL(x)) ? 'null' : %ToString(%DefaultString(x));
+  if (IS_BOOLEAN(x)) return %CondTaint(x, x ? 'true' : 'false');
+  if (IS_UNDEFINED(x)) return %CondTaint(x, 'undefined');
+  return (IS_NULL(x)) ? %CondTaint(x, 'null') : %ToString(%DefaultString(x));
 }
 
 function NonStringToString(x) {
   if (IS_NUMBER(x)) return %_NumberToString(x);
-  if (IS_BOOLEAN(x)) return x ? 'true' : 'false';
-  if (IS_UNDEFINED(x)) return 'undefined';
-  return (IS_NULL(x)) ? 'null' : %ToString(%DefaultString(x));
+  if (IS_BOOLEAN(x)) return %CondTaint(x, x ? 'true' : 'false');
+  if (IS_UNDEFINED(x)) return %CondTaint(x, 'undefined');
+  return (IS_NULL(x)) ? %CondTaint(x, 'null') : %ToString(%DefaultString(x));
 }
 
 
 // ECMA-262, section 9.9, page 36.
 function ToObject(x) {
-  if (IS_STRING(x)) return new $String(x);
-  if (IS_NUMBER(x)) return new $Number(x);
-  if (IS_BOOLEAN(x)) return new $Boolean(x);
+  if (IS_STRING(x)) return %CondTaint(x, new $String(x));
+  if (IS_NUMBER(x)) return %CondTaint(x, new $Number(x));
+  if (IS_BOOLEAN(x)) return %CondTaint(x, new $Boolean(x));
   if (IS_NULL_OR_UNDEFINED(x) && !IS_UNDETECTABLE(x)) {
     throw %MakeTypeError('null_to_object', []);
   }

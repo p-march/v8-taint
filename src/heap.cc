@@ -1453,6 +1453,8 @@ class ScavengingVisitor : public StaticVisitorBase {
       table_.Register(kVisitJSFunction, &EvacuateJSFunction);
     }
 
+    table_.Register(kVisitTainted, &EvacuateTainted);
+
     table_.RegisterSpecializations<ObjectEvacuationStrategy<DATA_OBJECT>,
                                    kVisitDataObject,
                                    kVisitDataObjectGeneric>();
@@ -1498,7 +1500,6 @@ class ScavengingVisitor : public StaticVisitorBase {
                                    int size)) {
     // Copy the content of source to target.
     heap->CopyBlock(target->address(), source->address(), size);
-
     // Set the forwarding address.
     source->set_map_word(MapWord::FromForwardingAddress(target));
 
@@ -1653,6 +1654,13 @@ class ScavengingVisitor : public StaticVisitorBase {
 
   static inline bool IsShortcutCandidate(int type) {
     return ((type & kShortcutTypeMask) == kShortcutTypeTag);
+  }
+
+  static inline void EvacuateTainted(Map* map,
+                                     HeapObject** slot,
+                                     HeapObject* object) {
+    int object_size = Tainted::BodyDescriptor::SizeOf(map, object);
+    EvacuateObject<POINTER_OBJECT, UNKNOWN_SIZE>(map, slot, object, object_size);
   }
 
   static inline void EvacuateShortcutCandidate(Map* map,
@@ -1973,6 +1981,11 @@ bool Heap::CreateInitialMaps() {
   }
   set_foreign_map(Map::cast(obj));
 
+  { MaybeObject* maybe_obj = AllocateMap(TAINTED_TYPE, kVariableSizeSentinel);
+    if (!maybe_obj->ToObject(&obj)) return false;
+  }
+  set_tainted_map(Map::cast(obj));
+
   for (unsigned i = 0; i < ARRAY_SIZE(string_type_table); i++) {
     const StringTypeTable& entry = string_type_table[i];
     { MaybeObject* maybe_obj = AllocateMap(entry.type, entry.size);
@@ -2219,6 +2232,21 @@ MaybeObject* Heap::CreateOddball(const char* to_string,
 }
 
 
+MaybeObject* Heap::CreateTaintedOddball(Object* oddball) {
+  Object* result;
+
+  // we do not use AllocateTainted() as we need to allocate this
+  // object in old data space
+  { MaybeObject* maybe_result = AllocateRaw(Tainted::kSize, OLD_DATA_SPACE);
+    if (!maybe_result->ToObject(&result)) return maybe_result;
+  }
+  HeapObject::cast(result)->set_map(tainted_map());
+  Tainted::cast(result)->set_size(Tainted::kSize);
+  Tainted::cast(result)->set_tainted_object(oddball);
+  return result;
+}
+
+
 bool Heap::CreateApiObjects() {
   Object* obj;
 
@@ -2333,12 +2361,22 @@ bool Heap::CreateInitialObjects() {
   }
   set_true_value(Oddball::cast(obj));
 
+  { MaybeObject* maybe_obj = CreateTaintedOddball(obj);
+    if (!maybe_obj->ToObject(&obj)) return false;
+  }
+  set_tainted_true_value(obj);
+
   { MaybeObject* maybe_obj = CreateOddball("false",
                                            Smi::FromInt(0),
                                            Oddball::kFalse);
     if (!maybe_obj->ToObject(&obj)) return false;
   }
   set_false_value(Oddball::cast(obj));
+
+  { MaybeObject* maybe_obj = CreateTaintedOddball(obj);
+    if (!maybe_obj->ToObject(&obj)) return false;
+  }
+  set_tainted_false_value(obj);
 
   { MaybeObject* maybe_obj = CreateOddball("hole",
                                            Smi::FromInt(-1),
@@ -2699,6 +2737,9 @@ MaybeObject* Heap::NumberFromDouble(double value, PretenureFlag pretenure) {
   // done after conversion to int. Doing this by comparing bit
   // patterns is faster than using fpclassify() et al.
   static const DoubleRepresentation minus_zero(-0.0);
+  
+  // TODO(petr): optimization for NaN, -0.0, we do not need to allocate these
+  // numbers as they are immutable, return reference to a single global instance
 
   DoubleRepresentation rep(value);
   if (rep.bits == minus_zero.bits) {
@@ -2723,6 +2764,21 @@ MaybeObject* Heap::AllocateForeign(Address address, PretenureFlag pretenure) {
   MaybeObject* maybe_result = Allocate(foreign_map(), space);
   if (!maybe_result->To(&result)) return maybe_result;
   result->set_foreign_address(address);
+  return result;
+}
+
+
+MaybeObject* Heap::AllocateTainted() {
+  // Statically ensure that it is safe to allocate tainted in paged spaces.
+  STATIC_ASSERT(Tainted::kSize <= Page::kMaxHeapObjectSize);
+  Object* result;
+  // Tainted Objects allocated only for tainting immutable objects and
+  // objects of basic types (Smi, HeapNumbers, Strings)
+  { MaybeObject* maybe_result = AllocateRaw(Tainted::kSize, NEW_SPACE);
+    if (!maybe_result->ToObject(&result)) return maybe_result;
+  }
+  HeapObject::cast(result)->set_map(tainted_map());
+  Tainted::cast(result)->set_size(Tainted::kSize);
   return result;
 }
 
@@ -4807,6 +4863,39 @@ bool Heap::InSpace(Address addr, AllocationSpace space) {
   }
 
   return false;
+}
+
+
+AllocationSpace Heap::GetSpace(Address addr) {
+  ASSERT(!OS::IsOutsideAllocatedSpace(addr));
+  ASSERT(HasBeenSetup());
+
+  if (new_space_.ToSpaceContains(addr)) {
+    return NEW_SPACE;
+  } else if (old_pointer_space_->Contains(addr)) {
+    return OLD_POINTER_SPACE;
+  } else if (old_data_space_->Contains(addr)) {
+    return OLD_DATA_SPACE;
+  } else if (code_space_->Contains(addr)) {
+    return CODE_SPACE;
+  } else if (map_space_->Contains(addr)) {
+    return MAP_SPACE;
+  } else if (cell_space_->Contains(addr)) {
+    return CELL_SPACE;
+  } else if (lo_space_->SlowContains(addr)) {
+    return LO_SPACE;
+  } else {
+    // should not be reached, consider
+    // FATAL("unreachable code");
+    UNREACHABLE();
+    return NEW_SPACE;
+  }
+
+}
+
+
+AllocationSpace Heap::GetSpace(HeapObject *obj) {
+  return GetSpace(obj->address());
 }
 
 

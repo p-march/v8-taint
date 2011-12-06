@@ -166,6 +166,9 @@ void HeapObject::HeapObjectPrint(FILE* out) {
     case FOREIGN_TYPE:
       Foreign::cast(this)->ForeignPrint(out);
       break;
+    case TAINTED_TYPE:
+      Tainted::cast(this)->TaintedPrint(out);
+      break;
     case SHARED_FUNCTION_INFO_TYPE:
       SharedFunctionInfo::cast(this)->SharedFunctionInfoPrint(out);
       break;
@@ -491,6 +494,7 @@ static const char* TypeToString(InstanceType type) {
     case JS_BUILTINS_OBJECT_TYPE: return "JS_BUILTINS_OBJECT";
     case JS_GLOBAL_PROXY_TYPE: return "JS_GLOBAL_PROXY";
     case FOREIGN_TYPE: return "FOREIGN";
+    case TAINTED_TYPE: return "TAINTED";
     case JS_MESSAGE_OBJECT_TYPE: return "JS_MESSAGE_OBJECT_TYPE";
 #define MAKE_STRUCT_CASE(NAME, Name, name) case NAME##_TYPE: return #NAME;
   STRUCT_LIST(MAKE_STRUCT_CASE)
@@ -728,7 +732,7 @@ void SharedFunctionInfo::SharedFunctionInfoPrint(FILE* out) {
 
 
 void JSGlobalProxy::JSGlobalProxyPrint(FILE* out) {
-  PrintF(out, "global_proxy");
+  PrintF(out, "global_proxy ");
   JSObjectPrint(out);
   PrintF(out, "context : ");
   context()->ShortPrint(out);
@@ -768,6 +772,21 @@ void Code::CodePrint(FILE* out) {
 
 void Foreign::ForeignPrint(FILE* out) {
   PrintF(out, "foreign address : %p", foreign_address());
+}
+
+
+void Tainted::TaintedPrint(FILE* out) {
+  Object* obj = tainted_object();
+  PrintF(out, "%p: [Tainted]\n", reinterpret_cast<void*>(this));
+  PrintF(out, " - map = %p\n", reinterpret_cast<void*>(map()));
+  PrintF(out, " - size = %d\n", size());
+  PrintF(out, " {\n");
+  if (obj->IsSmi()) {
+    Smi::cast(obj)->SmiPrint(out);
+  } else {
+    HeapObject::cast(obj)->HeapObjectPrint(out);
+  }
+  PrintF(out, " }\n");
 }
 
 

@@ -702,10 +702,11 @@ class LStringCompareAndBranch: public LControlInstruction<2, 0> {
 };
 
 
-class LHasInstanceTypeAndBranch: public LControlInstruction<1, 0> {
+class LHasInstanceTypeAndBranch: public LControlInstruction<1, 1> {
  public:
-  explicit LHasInstanceTypeAndBranch(LOperand* value) {
+  explicit LHasInstanceTypeAndBranch(LOperand* value, LOperand* temp) {
     inputs_[0] = value;
+    temps_[0] = temp;
   }
 
   DECLARE_CONCRETE_INSTRUCTION(HasInstanceTypeAndBranch,

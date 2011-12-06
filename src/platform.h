@@ -183,7 +183,7 @@ class OS {
   static void Guard(void* address, const size_t size);
 
   // Generate a random address to be used for hinting mmap().
-  static void* GetRandomMmapAddr();
+  static void* GetRandomMmapAddr(size_t size);
 
   // Get the Alignment guaranteed by Allocate().
   static size_t AllocateAlignment();

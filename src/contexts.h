@@ -30,6 +30,7 @@
 
 #include "heap.h"
 #include "objects.h"
+#include "handles.h"
 
 namespace v8 {
 namespace internal {
@@ -159,7 +160,8 @@ enum BindingFlags {
   V(DERIVED_GET_TRAP_INDEX, JSFunction, derived_get_trap) \
   V(DERIVED_SET_TRAP_INDEX, JSFunction, derived_set_trap) \
   V(PROXY_ENUMERATE, JSFunction, proxy_enumerate) \
-  V(RANDOM_SEED_INDEX, ByteArray, random_seed)
+  V(RANDOM_SEED_INDEX, ByteArray, random_seed) \
+  V(TAINT_POLICY_CONTEXT_INDEX, Object, taint_policy_context)
 
 // JSFunctions are pairs (context, function code), sometimes also called
 // closures. A Context object is used to represent function contexts and
@@ -282,6 +284,7 @@ class Context: public FixedArray {
     DERIVED_SET_TRAP_INDEX,
     PROXY_ENUMERATE,
     RANDOM_SEED_INDEX,
+    TAINT_POLICY_CONTEXT_INDEX,
 
     // Properties from here are treated as weak references by the full GC.
     // Scavenge treats them as strong references.
@@ -349,6 +352,35 @@ class Context: public FixedArray {
   bool IsBlockContext() {
     Map* map = this->map();
     return map == map->GetHeap()->block_context_map();
+  }
+
+  Context* GetTaintPolicyContext() {
+    Context* global_ctx = this;
+    if (!IsGlobalContext()) {
+      global_ctx = global_context();
+    }
+
+    Object* obj = global_ctx->get(TAINT_POLICY_CONTEXT_INDEX);
+
+    if (obj->IsContext())
+      return Context::cast(obj);
+
+    if (obj == this->map()->GetHeap()->null_value())
+      return global_ctx;
+
+    return NULL;
+  }
+
+  void SetTaintPolicyContext(Object* value) {
+    Context* global_ctx = this;
+    if (!IsGlobalContext()) {
+      global_ctx = global_context();
+    }
+    global_ctx->set(TAINT_POLICY_CONTEXT_INDEX, value);
+  }
+
+  bool HasTaintPolicyContext() {
+    return GetTaintPolicyContext() != NULL;
   }
 
   // Tells whether the global context is marked with out of memory.
@@ -423,6 +455,26 @@ class Context: public FixedArray {
   static bool IsBootstrappingOrContext(Object* object);
   static bool IsBootstrappingOrGlobalObject(Object* object);
 #endif
+};
+
+
+class UntaintedContextScope {
+ public:
+  inline UntaintedContextScope(Context* current) {
+    current_context_ = Handle<Context>(current->global_context());
+    taint_context_ =
+      Handle<Context>(Context::cast(current->GetTaintPolicyContext()));
+    Object* undefined_value = current->map()->GetHeap()->undefined_value();
+    current->SetTaintPolicyContext(undefined_value);
+  }
+
+  inline ~UntaintedContextScope() {
+    current_context_->SetTaintPolicyContext(*taint_context_);
+  }
+
+ private:
+  Handle<Context> current_context_;
+  Handle<Context> taint_context_;
 };
 
 } }  // namespace v8::internal

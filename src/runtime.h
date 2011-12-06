@@ -382,7 +382,15 @@ namespace internal {
   F(HaveSameMap, 2, 1) \
   /* profiler */ \
   F(ProfilerResume, 0, 1) \
-  F(ProfilerPause, 0, 1)
+  F(ProfilerPause, 0, 1) \
+  /* Taint support */ \
+  F(Taint, 1, 1) \
+  F(DeepTaint, 1, 1) \
+  F(DeepUntaint, 1, 1) \
+  F(Print, 1, 1) \
+  F(DeepPrint, 1, 1) \
+  F(GetTaintedObject, 1, 1) \
+  F(Untaint, 1, 1)
 
 
 #ifdef ENABLE_DEBUGGER_SUPPORT
@@ -511,7 +519,9 @@ namespace internal {
   F(IsRegExpEquivalent, 2, 1)                                                \
   F(HasCachedArrayIndex, 1, 1)                                               \
   F(GetCachedArrayIndex, 1, 1)                                               \
-  F(FastAsciiArrayJoin, 2, 1)
+  F(FastAsciiArrayJoin, 2, 1)                                                \
+  F(IsTainted, 1, 1)                                                         \
+  F(TaintNot, 1, 1)
 
 
 // ----------------------------------------------------------------------------

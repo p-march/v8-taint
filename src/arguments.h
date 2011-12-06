@@ -111,6 +111,47 @@ class CustomArguments : public Relocatable {
 };
 
 
+class TaintPolicyHelper {
+ public:
+  static inline bool HasTaintedArguments(Vector< Handle<Object> >& args) {
+    for (int i = 0; i < args.length(); i++) {
+      if (args[i]->IsTainted()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static inline void UntaintArguments(Vector< Handle<Object> >& args) {
+    for (int i = 0; i < args.length(); i++) {
+      if (args[i]->IsTainted()) {
+        args[i] =
+          Handle<Object>(Handle<Tainted>::cast(args[i])->tainted_object());
+      }
+    }
+  }
+
+  static inline void BackArgumentsWithHandles(Arguments& args,
+                                       Vector< Handle<Object> >& back_holder) {
+    ASSERT(args.length() == back_holder.length());
+    for (int i = 0; i < args.length(); i++) {
+      back_holder[i] = Handle<Object>(args[i]);
+    }
+  }
+
+  static inline void ResetArgumentsFromHandles(Arguments& args,
+                                       Vector< Handle<Object> >& back_holder) {
+    ASSERT(args.length() == back_holder.length());
+    for (int i = 0; i < args.length(); i++) {
+      args[i] = *back_holder[i];
+    }
+  }
+
+ private:
+  DISALLOW_IMPLICIT_CONSTRUCTORS(TaintPolicyHelper);
+};
+
+
 #define DECLARE_RUNTIME_FUNCTION(Type, Name)    \
 Type Name(Arguments args, Isolate* isolate)
 
@@ -121,6 +162,105 @@ Type Name(Arguments args, Isolate* isolate)
 
 #define RUNTIME_ARGUMENTS(isolate, args) args, isolate
 
+
+// Untaints given object if it is a tainted value
+#define UNTAINT(value) \
+  if (value->IsTainted()) value = Tainted::cast(value)->tainted_object();
+
+#define UNTAINT_ARGS(num)                                 \
+  bool __tainted = false;                                 \
+  USE(__tainted);                                         \
+  for (int i = 0; i < num; i++) {                         \
+    if (args[i]->IsTainted()) {                           \
+      args[i] = Tainted::cast(args[i])->tainted_object(); \
+      __tainted = true;                                   \
+    }                                                     \
+  }
+
+#define UNTAINT_ALL_ARGS()                                \
+  bool __tainted = false;                                 \
+  USE(__tainted);                                         \
+  for (int i = 0; i < args.length(); i++) {               \
+    if (args[i]->IsTainted()) {                           \
+      args[i] = Tainted::cast(args[i])->tainted_object(); \
+      __tainted = true;                                   \
+    }                                                     \
+  }
+
+#define UNTAINT_ARG(value)                                \
+  if (value->IsTainted()) {                               \
+    value = Tainted::cast(value)->tainted_object();       \
+    __tainted = true;                                     \
+  }
+
+#define UNTAINT_FIXED_ARRAY(array)                                   \
+  array = isolate->factory()->CopyFixedArray(array);                 \
+  for (int i=0; i < array->length(); i++) {                          \
+    if (array->get(i)->IsTainted()) {                                \
+      array->set(i, Tainted::cast(array->get(i))->tainted_object()); \
+      __tainted = true;                                              \
+    }                                                                \
+  }
+
+
+// CLEAN(petr):
+#ifdef DEBUG
+#define PRINT_ALL_ARGS()                                  \
+  for (int i = 0; i < args.length(); i++) {               \
+    printf("arg %d: ", i);                                \
+    args[i]->Print();                                     \
+    printf("\n");                                         \
+  }
+#define PRINT_ARGS(args)                                  \
+  for (int i = 0; i < args.length(); i++) {               \
+    printf("arg %d: ", i);                                \
+    args[i]->Print();                                     \
+    printf("\n");                                         \
+  }
+#else
+#define PRINT_ALL_ARGS() ((void) 0)
+#define PRINT_ARGS(args) ((void) 0)
+#endif
+
+// CLEAN(petr):
+#ifdef DEBUG
+#define ASSERT_IF_TAINTED_ARGS()                          \
+  for (int i = 0; i < args.length(); i++) {               \
+    if (args[i]->IsTainted()) {                           \
+      for (int j = 0; j < args.length(); j++) {           \
+        args[j]->ShortPrint();                            \
+        printf("\n");                                     \
+      }                                                   \
+      ASSERT(!args[i]->IsTainted());                      \
+    }                                                     \
+  }
+#define ASSERT_IF_TAINTED_ARG(index)                      \
+  if (args[index]->IsTainted()) {                         \
+    for (int j = 0; j < args.length(); j++) {             \
+      args[j]->ShortPrint();                              \
+      printf("\n");                                       \
+    }                                                     \
+    ASSERT(!args[index]->IsTainted());                    \
+  }
+#else
+#define ASSERT_IF_TAINTED_ARGS() ((void) 0)
+#define ASSERT_IF_TAINTED_ARG(index) ((void) 0)
+#endif
+
+#define HAS_TAINTED_ARGS()                                \
+  __tainted
+
+#define TAINT_RETURN(value)                               \
+  { MaybeObject* __mobj = value;                          \
+    Object* __obj;                                        \
+    if (!__mobj->ToObject(&__obj)) {                      \
+      return __mobj;                                      \
+    } else if (__tainted && !__obj->IsTainted()) {        \
+      HandleScope scope(isolate);                         \
+      return *Taint(Handle<Object>(__obj));               \
+    } else {                                              \
+      return __obj;                                       \
+   } }
 
 } }  // namespace v8::internal
 

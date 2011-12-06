@@ -64,6 +64,8 @@ inline Heap* _inline_get_heap_();
   V(Oddball, null_value, NullValue)                                            \
   V(Oddball, true_value, TrueValue)                                            \
   V(Oddball, false_value, FalseValue)                                          \
+  V(Object, tainted_true_value, TaintedTrueValue)                              \
+  V(Object, tainted_false_value, TaintedFalseValue)                            \
   V(Map, global_property_cell_map, GlobalPropertyCellMap)                      \
   V(Map, shared_function_info_map, SharedFunctionInfoMap)                      \
   V(Map, meta_map, MetaMap)                                                    \
@@ -139,6 +141,7 @@ inline Heap* _inline_get_heap_();
   V(Map, oddball_map, OddballMap)                                              \
   V(Map, message_object_map, JSMessageObjectMap)                               \
   V(Map, foreign_map, ForeignMap)                                              \
+  V(Map, tainted_map, TaintedMap)                                              \
   V(HeapNumber, nan_value, NanValue)                                           \
   V(HeapNumber, infinity_value, InfinityValue)                                 \
   V(HeapNumber, minus_zero_value, MinusZeroValue)                              \
@@ -864,6 +867,15 @@ class Heap {
   MUST_USE_RESULT MaybeObject* AllocateForeign(
       Address address, PretenureFlag pretenure = NOT_TENURED);
 
+  // Allocates a new tainted object.
+  // Returns Failure::RetryAfterGC(requested_bytes, space) if the allocation
+  // failed.
+  // Please note this does not perform a garbage collection.
+  // Allocation of Tainted is required only when tainting immutable objects
+  // and objects of basic types (SMI, HeapNumber, String); otherwise,
+  // the tainted object rewritten in place, see Object::Taint()
+  MUST_USE_RESULT MaybeObject* AllocateTainted();
+
   // Allocates a new SharedFunctionInfo object.
   // Returns Failure::RetryAfterGC(requested_bytes, space) if the allocation
   // failed.
@@ -915,6 +927,14 @@ class Heap {
   // Finalizes an external string by deleting the associated external
   // data and clearing the resource pointer.
   inline void FinalizeExternalString(String* string);
+
+  // Allocates an uninitialized object.  The memory is non-executable if the
+  // hardware and OS allow.
+  // Returns Failure::RetryAfterGC(requested_bytes, space) if the allocation
+  // failed.
+  // Please note this function does not perform a garbage collection.
+  MUST_USE_RESULT inline MaybeObject* AllocateRaw(int size_in_bytes,
+                                                  AllocationSpace space);
 
   // Allocates an uninitialized object.  The memory is non-executable if the
   // hardware and OS allow.
@@ -1129,6 +1149,11 @@ class Heap {
   // Currently used by tests, serialization and heap verification only.
   bool InSpace(Address addr, AllocationSpace space);
   bool InSpace(HeapObject* value, AllocationSpace space);
+
+  // Returns space id of a heap-allocated object
+  // Currently used in Object::TaintObject()
+  AllocationSpace GetSpace(Address addr);
+  AllocationSpace GetSpace(HeapObject* obj);
 
   // Finds out which space an object should get promoted to based on its type.
   inline OldSpace* TargetSpace(HeapObject* object);
@@ -1730,6 +1755,8 @@ class Heap {
   MaybeObject* CreateOddball(const char* to_string,
                              Object* to_number,
                              byte kind);
+
+  MaybeObject* CreateTaintedOddball(Object* oddbal);
 
   // Allocate empty fixed array.
   MUST_USE_RESULT MaybeObject* AllocateEmptyFixedArray();

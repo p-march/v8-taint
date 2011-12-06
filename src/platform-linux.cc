@@ -359,7 +359,7 @@ void* OS::Allocate(const size_t requested,
                    bool is_executable) {
   const size_t msize = RoundUp(requested, AllocateAlignment());
   int prot = PROT_READ | PROT_WRITE | (is_executable ? PROT_EXEC : 0);
-  void* addr = OS::GetRandomMmapAddr();
+  void* addr = OS::GetRandomMmapAddr(msize);
   void* mbase = mmap(addr, msize, prot, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   if (mbase == MAP_FAILED) {
     LOG(i::Isolate::Current(),
@@ -429,7 +429,7 @@ OS::MemoryMappedFile* OS::MemoryMappedFile::open(const char* name) {
   int size = ftell(file);
 
   void* memory =
-      mmap(OS::GetRandomMmapAddr(),
+      mmap(OS::GetRandomMmapAddr(size),
            size,
            PROT_READ | PROT_WRITE,
            MAP_SHARED,
@@ -449,7 +449,7 @@ OS::MemoryMappedFile* OS::MemoryMappedFile::create(const char* name, int size,
     return NULL;
   }
   void* memory =
-      mmap(OS::GetRandomMmapAddr(),
+      mmap(OS::GetRandomMmapAddr(size),
            size,
            PROT_READ | PROT_WRITE,
            MAP_SHARED,
@@ -539,7 +539,7 @@ void OS::SignalCodeMovingGC() {
   // kernel log.
   int size = sysconf(_SC_PAGESIZE);
   FILE* f = fopen(kGCFakeMmap, "w+");
-  void* addr = mmap(OS::GetRandomMmapAddr(),
+  void* addr = mmap(OS::GetRandomMmapAddr(size),
                     size,
                     PROT_READ | PROT_EXEC,
                     MAP_PRIVATE,
@@ -601,7 +601,7 @@ VirtualMemory::VirtualMemory(size_t size, size_t alignment)
   ASSERT(IsAligned(alignment, static_cast<intptr_t>(OS::AllocateAlignment())));
   size_t request_size = RoundUp(size + alignment,
                                 static_cast<intptr_t>(OS::AllocateAlignment()));
-  void* reservation = mmap(OS::GetRandomMmapAddr(),
+  void* reservation = mmap(OS::GetRandomMmapAddr(request_size),
                            request_size,
                            PROT_NONE,
                            MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE,
@@ -667,7 +667,7 @@ bool VirtualMemory::Uncommit(void* address, size_t size) {
 
 
 void* VirtualMemory::ReserveRegion(size_t size) {
-  void* result = mmap(OS::GetRandomMmapAddr(),
+  void* result = mmap(OS::GetRandomMmapAddr(size),
                       size,
                       PROT_NONE,
                       MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE,

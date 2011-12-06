@@ -1,4 +1,4 @@
-// Copyright 2011 the V8 project authors. All rights reserved.
+// Copyright 2012 the V8 project authors. All rights reserved.
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
 // met:
@@ -269,6 +269,7 @@ class LCodeGen BASE_EMBEDDED {
   Condition EmitTypeofIs(Label* true_label,
                          Label* false_label,
                          Register input,
+                         Register temp,
                          Handle<String> type_name);
 
   // Emits optimized code for %_IsObject(x).  Preserves input register.

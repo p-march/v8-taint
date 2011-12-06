@@ -1919,6 +1919,8 @@ Handle<Code> CallStubCompiler::CompileFastApiCall(
       Handle<JSObject>::cast(object), holder);
   if (depth == kInvalidProtoDepth) return Handle<Code>::null();
 
+  if (FLAG_taint_policy) return Handle<Code>::null();
+
   Label miss, miss_before_stack_reserved;
   GenerateNameCheck(name, &miss_before_stack_reserved);
 

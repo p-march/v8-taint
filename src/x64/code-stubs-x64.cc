@@ -3187,6 +3187,12 @@ void CompareStub::Generate(MacroAssembler* masm) {
   Label check_unequal_objects, done;
   Factory* factory = masm->isolate()->factory();
 
+  // NOTE(petr): taint needs to be propagated for implicit information control
+  // jump to slow path if input is tainted
+  Label tainted;
+  __ JumpIfTainted(rax, &tainted);
+  __ JumpIfTainted(rdx, &tainted);
+  
   // Compare two smis if required.
   if (include_smi_compare_) {
     Label non_smi, smi_done;
@@ -3430,6 +3436,8 @@ void CompareStub::Generate(MacroAssembler* masm) {
     __ ret(0);
     __ bind(&not_both_objects);
   }
+
+  __ bind(&tainted);
 
   // Push arguments below the return address to prepare jump to builtin.
   __ pop(rcx);

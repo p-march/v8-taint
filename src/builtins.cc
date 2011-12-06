@@ -1161,7 +1161,6 @@ MUST_USE_RESULT static MaybeObject* HandleApiCallHelper(
     CustomArguments custom(isolate);
     v8::ImplementationUtilities::PrepareArgumentsData(custom.end(),
         data_obj, *function, raw_holder);
-
     v8::Arguments new_args = v8::ImplementationUtilities::NewArguments(
         custom.end(),
         &args[0] - 1,
@@ -1190,13 +1189,57 @@ MUST_USE_RESULT static MaybeObject* HandleApiCallHelper(
 }
 
 
+template <bool is_construct>
+MUST_USE_RESULT static MaybeObject* HandleApiCallHelperTaintCheck(
+    BuiltinArguments<NEEDS_CALLED_FUNCTION> args, Isolate* isolate) {
+  if (!isolate->context()->HasTaintPolicyContext())
+    return HandleApiCallHelper<is_construct>(args, isolate);
+  
+  MaybeObject* result;
+  HandleScope scope(isolate);
+  Vector< Handle<Object> > back_holder =
+    Vector< Handle<Object> >::New(dynamic_cast<Arguments*>(&args)->length());
+  TaintPolicyHelper::BackArgumentsWithHandles(args, back_holder);
+
+  Vector< Handle<Object> > policy_args =
+    Vector< Handle<Object> >::New(back_holder.length()+1);
+  policy_args[0] = Handle<Object>::cast(
+      isolate->factory()->LookupAsciiSymbol(
+          is_construct ? "construct" : "call"));
+  policy_args[1] = back_holder[0];
+  policy_args[2] = back_holder[back_holder.length() - 1];
+  for (int i = 1; i < back_holder.length() - 1; i++) {
+    policy_args[i+2] = back_holder[i];
+  }
+
+  result = Execution::TaintPolicyCheck(isolate, policy_args);
+  if (result) goto leave;
+
+  // args contain handle-locations of objects, replace the values
+  // within the handle-locations if the object is tatined
+  TaintPolicyHelper::UntaintArguments(back_holder);
+
+  TaintPolicyHelper::ResetArgumentsFromHandles(args, back_holder);
+
+  {
+    UntaintedContextScope ctx_scope(isolate->context());
+    result = HandleApiCallHelper<is_construct>(args, isolate);
+  }
+
+ leave:
+  back_holder.Dispose();
+  policy_args.Dispose();
+  return result;
+}
+
+
 BUILTIN(HandleApiCall) {
-  return HandleApiCallHelper<false>(args, isolate);
+  return HandleApiCallHelperTaintCheck<false>(args, isolate);
 }
 
 
 BUILTIN(HandleApiCallConstruct) {
-  return HandleApiCallHelper<true>(args, isolate);
+  return HandleApiCallHelperTaintCheck<true>(args, isolate);
 }
 
 
@@ -1217,7 +1260,8 @@ static void VerifyTypeCheck(Handle<JSObject> object,
 #endif
 
 
-BUILTIN(FastHandleApiCall) {
+MaybeObject* FastHandleApiCallInternal(FastHandleApiCallArgumentsType args,
+                                       Isolate* isolate) {
   ASSERT(!CalledAsConstructor(isolate));
   Heap* heap = isolate->heap();
   const bool is_construct = false;
@@ -1259,6 +1303,59 @@ BUILTIN(FastHandleApiCall) {
 
   RETURN_IF_SCHEDULED_EXCEPTION(isolate);
   return result;
+}
+
+
+MaybeObject* FastHandleApiCallTaintCheck(FastHandleApiCallArgumentsType args,
+                                         Isolate* isolate) {
+  if (!isolate->context()->HasTaintPolicyContext())
+    return FastHandleApiCallInternal(args, isolate);
+  
+  MaybeObject* result;
+  HandleScope scope(isolate);
+  Vector< Handle<Object> > back_holder =
+    Vector< Handle<Object> >::New(args.length());
+  TaintPolicyHelper::BackArgumentsWithHandles(args, back_holder);
+
+  // TODO(petr): check if we place arguments correctly for taint policy check
+  ASSERT(0);
+  Vector< Handle<Object> > policy_args =
+    Vector< Handle<Object> >::New(back_holder.length()+3);
+  policy_args[0] = Handle<Object>::cast(
+      isolate->factory()->LookupAsciiSymbol("call"));
+  policy_args[1] = back_holder[back_holder.length() - 1];
+  policy_args[2] = back_holder[back_holder.length() - 3];
+  for (int i = 0; i < back_holder.length(); i++) {
+    policy_args[i+3] = back_holder[i];
+  }
+
+  result = Execution::TaintPolicyCheck(isolate, policy_args);
+  if (result) goto leave;
+
+  // TODO(petr): get rid of this assert if needed
+  ASSERT(!TaintPolicyHelper::HasTaintedArguments(policy_args));
+
+  // args contain handle-locations of objects, replace the values
+  // within the handle-locations if the object is tatined
+  TaintPolicyHelper::UntaintArguments(back_holder);
+
+  TaintPolicyHelper::ResetArgumentsFromHandles(args, back_holder);
+
+  {
+    UntaintedContextScope ctx_scope(isolate->context());
+    result = FastHandleApiCallInternal(args, isolate);
+  }
+
+ leave:
+  back_holder.Dispose();
+  policy_args.Dispose();
+  return result;
+}
+
+
+BUILTIN(FastHandleApiCall) {
+  ASSERT(!CalledAsConstructor(isolate));
+  return FastHandleApiCallTaintCheck(args, isolate);
 }
 
 
@@ -1326,17 +1423,72 @@ MUST_USE_RESULT static MaybeObject* HandleApiCallAsFunctionOrConstructor(
 }
 
 
+MUST_USE_RESULT
+static MaybeObject* HandleApiCallAsFunctionOrConstructorTaintCheck(
+    Isolate* isolate,
+    bool is_construct_call,
+    BuiltinArguments<NO_EXTRA_ARGUMENTS> args) {
+  if (!isolate->context()->HasTaintPolicyContext())
+    return HandleApiCallAsFunctionOrConstructor(isolate,
+                                                is_construct_call,
+                                                args);
+
+  MaybeObject* result;
+  HandleScope scope(isolate);
+  Vector< Handle<Object> > back_holder =
+    Vector< Handle<Object> >::New(dynamic_cast<Arguments*>(&args)->length());
+  TaintPolicyHelper::BackArgumentsWithHandles(args, back_holder);
+
+  // TODO(petr): check if we place arguments correctly when checking taint policy
+  ASSERT(0);
+  Vector< Handle<Object> > policy_args =
+    Vector< Handle<Object> >::New(back_holder.length()+3);
+  policy_args[0] = Handle<Object>::cast(
+      isolate->factory()->LookupAsciiSymbol(
+          is_construct_call ? "construct" : "call"));
+  policy_args[1] = back_holder[back_holder.length() - 5];
+  policy_args[2] = back_holder[back_holder.length() - 7];
+  for (int i = 0; i < back_holder.length(); i++) {
+    policy_args[i+3] = back_holder[i];
+  }
+
+  result = Execution::TaintPolicyCheck(isolate, policy_args);
+  if (result) goto leave;
+
+  // TODO(petr): get rid of this assert if needed
+  ASSERT(!TaintPolicyHelper::HasTaintedArguments(policy_args));
+
+  // args contain handle-locations of objects, replace the values
+  // within the handle-locations if the object is tatined
+  TaintPolicyHelper::UntaintArguments(back_holder);
+
+  TaintPolicyHelper::ResetArgumentsFromHandles(args, back_holder);
+
+  {
+    UntaintedContextScope ctx_scope(isolate->context());
+    result = HandleApiCallAsFunctionOrConstructor(isolate,
+                                                  is_construct_call,
+                                                  args);
+  }
+
+ leave:
+  back_holder.Dispose();
+  policy_args.Dispose();
+  return result;
+}
+
+
 // Handle calls to non-function objects created through the API. This delegate
 // function is used when the call is a normal function call.
 BUILTIN(HandleApiCallAsFunction) {
-  return HandleApiCallAsFunctionOrConstructor(isolate, false, args);
+  return HandleApiCallAsFunctionOrConstructorTaintCheck(isolate, false, args);
 }
 
 
 // Handle calls to non-function objects created through the API. This delegate
 // function is used when the call is a construct call.
 BUILTIN(HandleApiCallAsConstructor) {
-  return HandleApiCallAsFunctionOrConstructor(isolate, true, args);
+  return HandleApiCallAsFunctionOrConstructorTaintCheck(isolate, true, args);
 }
 
 

@@ -85,7 +85,7 @@ class FullCodeGenerator: public AstVisitor {
         loop_depth_(0),
         context_(NULL),
         bailout_entries_(0),
-        stack_checks_(2) {  // There's always at least one.
+        stack_checks_(2) {
   }
 
   static bool MakeCode(CompilationInfo* info);

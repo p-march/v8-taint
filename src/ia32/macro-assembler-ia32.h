@@ -731,6 +731,19 @@ class MacroAssembler: public Assembler {
 
 
   // ---------------------------------------------------------------------------
+  // Tainting support
+
+  Condition CheckTainted(Register src, Register scratch);
+
+  void JumpIfTainted(Register src,
+                     Register scratch,
+                     Label* on_tainted,
+                     Label::Distance near_jump = Label::kFar);
+
+  void Untaint(Register src, Register scratch);
+
+
+  // ---------------------------------------------------------------------------
   // StatsCounter support
 
   void SetCounter(StatsCounter* counter, int value);

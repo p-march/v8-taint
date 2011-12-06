@@ -3497,6 +3497,19 @@ class V8EXPORT Context {
   void AllowCodeGenerationFromStrings(bool allow);
 
   /**
+   * Associates a taint policy context with the current context if the taint
+   * context is given. Otherwise, the current context will be used as a taint
+   * policy context. The taint context is used to compile/run a taint policy
+   * given as a string in source. If the source is not provided, the policy is
+   * taken from a file specified with --taint_policy_file flag or a default
+   * file which is ./taint_policy.js The value passed in file is for error
+   * handling only.
+   */
+  bool SetTaintPolicy(Handle<Context> taint_context = Handle<Context>(),
+                      Handle<String> source = Handle<String>(),
+                      Handle<Value> file = Handle<Value>());
+
+  /**
    * Stack-allocated class which sets the execution context for all
    * operations executed within a local scope.
    */
@@ -3800,7 +3813,7 @@ class Internals {
   static const int kFullStringRepresentationMask = 0x07;
   static const int kExternalTwoByteRepresentationTag = 0x02;
 
-  static const int kJSObjectType = 0xa6;
+  static const int kJSObjectType = 0xa7;
   static const int kFirstNonstringType = 0x80;
   static const int kForeignType = 0x85;
 

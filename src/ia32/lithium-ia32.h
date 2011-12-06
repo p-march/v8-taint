@@ -2055,10 +2055,11 @@ class LTypeof: public LTemplateInstruction<1, 2, 0> {
 };
 
 
-class LTypeofIsAndBranch: public LControlInstruction<1, 0> {
+class LTypeofIsAndBranch: public LControlInstruction<1, 1> {
  public:
-  explicit LTypeofIsAndBranch(LOperand* value) {
+  explicit LTypeofIsAndBranch(LOperand* value, LOperand* temp) {
     inputs_[0] = value;
+    temps_[0] = temp;
   }
 
   DECLARE_CONCRETE_INSTRUCTION(TypeofIsAndBranch, "typeof-is-and-branch")

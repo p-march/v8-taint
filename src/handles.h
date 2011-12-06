@@ -347,6 +347,8 @@ Handle<ObjectHashTable> PutIntoObjectHashTable(Handle<ObjectHashTable> table,
                                                Handle<Object> key,
                                                Handle<Object> value);
 
+Handle<Object> Taint(Handle<Object> obj);
+
 class NoHandleAllocation BASE_EMBEDDED {
  public:
 #ifndef DEBUG

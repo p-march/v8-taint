@@ -688,6 +688,12 @@ bool Object::IsPolymorphicCodeCacheHashTable() {
 }
 
 
+bool Object::IsTainted() {
+  return Object::IsHeapObject()
+      && HeapObject::cast(this)->map()->instance_type() == TAINTED_TYPE;
+}
+
+
 bool Object::IsMapCache() {
   return IsHashTable();
 }
@@ -2083,6 +2089,7 @@ CAST_ACCESSOR(JSSet)
 CAST_ACCESSOR(JSMap)
 CAST_ACCESSOR(JSWeakMap)
 CAST_ACCESSOR(Foreign)
+CAST_ACCESSOR(Tainted)
 CAST_ACCESSOR(ByteArray)
 CAST_ACCESSOR(FreeSpace)
 CAST_ACCESSOR(ExternalArray)
@@ -2690,6 +2697,9 @@ int HeapObject::SizeFromMap(Map* map) {
   if (instance_type == FIXED_DOUBLE_ARRAY_TYPE) {
     return FixedDoubleArray::SizeFor(
         reinterpret_cast<FixedDoubleArray*>(this)->length());
+  }
+  if (instance_type == TAINTED_TYPE) {
+    return reinterpret_cast<Tainted*>(this)->size();
   }
   ASSERT(instance_type == CODE_TYPE);
   return reinterpret_cast<Code*>(this)->CodeSize();
@@ -3939,6 +3949,10 @@ ACCESSORS(JSSet, table, Object, kTableOffset)
 ACCESSORS(JSMap, table, Object, kTableOffset)
 ACCESSORS(JSWeakMap, table, Object, kTableOffset)
 ACCESSORS(JSWeakMap, next, Object, kNextOffset)
+
+
+ACCESSORS(Tainted, tainted_object, Object, kObjectOffset)
+SMI_ACCESSORS(Tainted, size, kSizeOffset)
 
 
 Address Foreign::foreign_address() {

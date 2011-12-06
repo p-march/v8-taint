@@ -1503,7 +1503,8 @@ LInstruction* LChunkBuilder::DoStringCompareAndBranch(
 LInstruction* LChunkBuilder::DoHasInstanceTypeAndBranch(
     HHasInstanceTypeAndBranch* instr) {
   ASSERT(instr->value()->representation().IsTagged());
-  return new LHasInstanceTypeAndBranch(UseRegisterAtStart(instr->value()));
+  return new LHasInstanceTypeAndBranch(UseRegisterAtStart(instr->value()),
+                                       TempRegister());
 }
 
 

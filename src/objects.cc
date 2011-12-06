@@ -261,6 +261,55 @@ MaybeObject* JSObject::GetPropertyWithCallback(Object* receiver,
 }
 
 
+MaybeObject* JSObject::GetPropertyWithCallbackTaintCheck(Object* receiver,
+                                                         Object* structure,
+                                                         String* name) {
+  Isolate* isolate = name->GetIsolate();
+  if (!isolate->context()->HasTaintPolicyContext())
+    return GetPropertyWithCallback(receiver, structure, name);
+  // do not track __defineGetter__ and foreign callbacks
+  if (structure->IsFixedArray() || structure->IsForeign())
+    return GetPropertyWithCallback(receiver, structure, name);
+
+  MaybeObject* result;
+  bool taint = false;
+  HandleScope scope(isolate);
+  Handle<JSObject> self(this);
+  Handle<Object> receiver_handler(receiver);
+  Handle<Object> structure_handler(structure);
+  Handle<String> name_handler(name);
+
+  Vector< Handle<Object> > args = Vector< Handle<Object> >::New(3);
+  args[0] = Handle<Object>::cast(isolate->factory()->LookupAsciiSymbol("get"));
+  args[1] = self;
+  args[2] = Handle<Object>::cast(name_handler);
+
+  result = Execution::TaintPolicyCheck(isolate, args, &taint);
+  if (result) goto leave;
+  
+  // TODO(petr): get rid of this assert if needed
+  ASSERT(!TaintPolicyHelper::HasTaintedArguments(args));
+
+  TaintPolicyHelper::UntaintArguments(args);
+
+  {
+    UntaintedContextScope ctx_scope(isolate->context());
+    result = self->GetPropertyWithCallback(*receiver_handler,
+                                           *structure_handler,
+                                           *name_handler);
+  }
+
+  Object* obj;
+  if (taint && result->ToObject(&obj)) {
+    result = obj->Taint();
+  }
+
+ leave:
+  args.Dispose();
+  return result;
+}
+
+
 MaybeObject* JSProxy::GetPropertyWithHandler(Object* receiver_raw,
                                              String* name_raw) {
   Isolate* isolate = GetIsolate();
@@ -351,7 +400,7 @@ MaybeObject* JSObject::GetPropertyWithFailedAccessCheck(
           AccessorInfo* info = AccessorInfo::cast(obj);
           if (info->all_can_read()) {
             *attributes = result->GetAttributes();
-            return result->holder()->GetPropertyWithCallback(
+            return result->holder()->GetPropertyWithCallbackTaintCheck(
                 receiver, result->GetCallbackObject(), name);
           }
         }
@@ -654,13 +703,13 @@ MaybeObject* Object::GetProperty(Object* receiver,
     case CONSTANT_FUNCTION:
       return result->GetConstantFunction();
     case CALLBACKS:
-      return result->holder()->GetPropertyWithCallback(
+      return result->holder()->GetPropertyWithCallbackTaintCheck(
           receiver, result->GetCallbackObject(), name);
     case HANDLER:
       return result->proxy()->GetPropertyWithHandler(receiver, name);
     case INTERCEPTOR: {
       JSObject* recvr = JSObject::cast(receiver);
-      return result->holder()->GetPropertyWithInterceptor(
+      return result->holder()->GetPropertyWithInterceptorTaintCheck(
           recvr, name, attributes);
     }
     case MAP_TRANSITION:
@@ -718,7 +767,7 @@ MaybeObject* Object::GetElementWithReceiver(Object* receiver, uint32_t index) {
     }
 
     if (js_object->HasIndexedInterceptor()) {
-      return js_object->GetElementWithInterceptor(receiver, index);
+      return js_object->GetElementWithInterceptorTaintCheck(receiver, index);
     }
 
     if (js_object->elements() != heap->empty_fixed_array()) {
@@ -762,6 +811,214 @@ Object* Object::GetPrototype() {
     return context->boolean_function()->instance_prototype();
   } else {
     return heap->null_value();
+  }
+}
+
+
+// CLEAN(petr);
+static const char* TypeToString(InstanceType type) {
+  switch (type) {
+    case INVALID_TYPE: return "INVALID";
+    case MAP_TYPE: return "MAP";
+    case HEAP_NUMBER_TYPE: return "HEAP_NUMBER";
+    case SYMBOL_TYPE: return "SYMBOL";
+    case ASCII_SYMBOL_TYPE: return "ASCII_SYMBOL";
+    case CONS_SYMBOL_TYPE: return "CONS_SYMBOL";
+    case CONS_ASCII_SYMBOL_TYPE: return "CONS_ASCII_SYMBOL";
+    case EXTERNAL_ASCII_SYMBOL_TYPE:
+    case EXTERNAL_SYMBOL_WITH_ASCII_DATA_TYPE:
+    case EXTERNAL_SYMBOL_TYPE: return "EXTERNAL_SYMBOL";
+    case ASCII_STRING_TYPE: return "ASCII_STRING";
+    case STRING_TYPE: return "TWO_BYTE_STRING";
+    case CONS_STRING_TYPE:
+    case CONS_ASCII_STRING_TYPE: return "CONS_STRING";
+    case EXTERNAL_ASCII_STRING_TYPE:
+    case EXTERNAL_STRING_WITH_ASCII_DATA_TYPE:
+    case EXTERNAL_STRING_TYPE: return "EXTERNAL_STRING";
+    case FIXED_ARRAY_TYPE: return "FIXED_ARRAY";
+    case BYTE_ARRAY_TYPE: return "BYTE_ARRAY";
+    case EXTERNAL_PIXEL_ARRAY_TYPE: return "EXTERNAL_PIXEL_ARRAY";
+    case EXTERNAL_BYTE_ARRAY_TYPE: return "EXTERNAL_BYTE_ARRAY";
+    case EXTERNAL_UNSIGNED_BYTE_ARRAY_TYPE:
+      return "EXTERNAL_UNSIGNED_BYTE_ARRAY";
+    case EXTERNAL_SHORT_ARRAY_TYPE: return "EXTERNAL_SHORT_ARRAY";
+    case EXTERNAL_UNSIGNED_SHORT_ARRAY_TYPE:
+      return "EXTERNAL_UNSIGNED_SHORT_ARRAY";
+    case EXTERNAL_INT_ARRAY_TYPE: return "EXTERNAL_INT_ARRAY";
+    case EXTERNAL_UNSIGNED_INT_ARRAY_TYPE:
+      return "EXTERNAL_UNSIGNED_INT_ARRAY";
+    case EXTERNAL_FLOAT_ARRAY_TYPE: return "EXTERNAL_FLOAT_ARRAY";
+    case EXTERNAL_DOUBLE_ARRAY_TYPE: return "EXTERNAL_DOUBLE_ARRAY";
+    case FILLER_TYPE: return "FILLER";
+    case JS_OBJECT_TYPE: return "JS_OBJECT";
+    case JS_CONTEXT_EXTENSION_OBJECT_TYPE: return "JS_CONTEXT_EXTENSION_OBJECT";
+    case ODDBALL_TYPE: return "ODDBALL";
+    case JS_GLOBAL_PROPERTY_CELL_TYPE: return "JS_GLOBAL_PROPERTY_CELL";
+    case SHARED_FUNCTION_INFO_TYPE: return "SHARED_FUNCTION_INFO";
+    case JS_FUNCTION_TYPE: return "JS_FUNCTION";
+    case CODE_TYPE: return "CODE";
+    case JS_ARRAY_TYPE: return "JS_ARRAY";
+    case JS_PROXY_TYPE: return "JS_PROXY";
+    case JS_WEAK_MAP_TYPE: return "JS_WEAK_MAP";
+    case JS_REGEXP_TYPE: return "JS_REGEXP";
+    case JS_VALUE_TYPE: return "JS_VALUE";
+    case JS_GLOBAL_OBJECT_TYPE: return "JS_GLOBAL_OBJECT";
+    case JS_BUILTINS_OBJECT_TYPE: return "JS_BUILTINS_OBJECT";
+    case JS_GLOBAL_PROXY_TYPE: return "JS_GLOBAL_PROXY";
+    case FOREIGN_TYPE: return "FOREIGN";
+    case TAINTED_TYPE: return "TAINTED";
+    case JS_MESSAGE_OBJECT_TYPE: return "JS_MESSAGE_OBJECT_TYPE";
+#define MAKE_STRUCT_CASE(NAME, Name, name) case NAME##_TYPE: return #NAME;
+  STRUCT_LIST(MAKE_STRUCT_CASE)
+#undef MAKE_STRUCT_CASE
+    default: return "UNKNOWN";
+  }
+}
+
+
+MaybeObject* Object::TaintReference() {
+  ASSERT(!this->IsTainted());
+  ASSERT(!this->IsSpecObject());
+  // CLEAN(petr):
+  printf("Tainting reference %s\n", this->IsHeapObject() ?
+         TypeToString(HeapObject::cast(this)->map()->instance_type()) : "smi");
+  Object* result;
+  { MaybeObject* maybe_clone = HEAP->AllocateTainted();
+    if (!maybe_clone->ToObject(&result)) return maybe_clone;
+  }
+  Tainted::cast(result)->set_tainted_object(this);
+  return result;
+}
+
+
+MaybeObject* Object::TaintObject() {
+  ASSERT(!this->IsTainted());
+  ASSERT(this->IsSpecObject());
+
+  HeapObject* heap_obj = HeapObject::cast(this);
+  Heap* heap = heap_obj->GetHeap();
+  int size = heap_obj->Size();  // Byte size of the original object
+  if (size < Tainted::kSize) {
+    // If this happens, consider enforcing minimal object size which
+    // is the size of Tainted::kSize for heap allocated objects
+    // (when allocated by runtime and generated code).
+    Isolate* isolate = heap->isolate();
+    return isolate->Throw(*isolate->factory()->NewError(
+        "Object is too small to be tainted", HandleVector<Object>(NULL, 0)));
+  }
+    
+  // Shallow copy the object
+  AllocationSpace space = heap->GetSpace(heap_obj);
+  // wired cases, should not happen
+  ASSERT(space != CODE_SPACE &&
+         space != MAP_SPACE &&
+         space != CELL_SPACE);
+    
+  Object* clone;
+  // Allocate clone object in the same space
+  { MaybeObject* maybe_clone = heap->AllocateRaw(size, space);
+    if (!maybe_clone->ToObject(&clone)) return maybe_clone;
+  }
+
+  Address clone_address = HeapObject::cast(clone)->address();
+  heap->CopyBlock(clone_address, heap_obj->address(), size);
+  // Update write barrier for all fields that lie beyond the header.
+  heap->RecordWrites(clone_address, Object::kHeaderSize,
+                     (size - Object::kHeaderSize) / kPointerSize);
+
+  // Convert the current object to the Tainted by
+  // rewriting its fields
+  ASSERT(size >= Tainted::kSize);
+  heap_obj->set_map(heap->tainted_map());
+  Tainted* self = Tainted::cast(this);
+  // Save the original object's size as the memory slot used by the
+  // Tainted is exactly of the same size
+  self->set_size(size);
+  self->set_tainted_object(clone);
+
+  // Fill the remainder of the Tainted with dead wood.
+  if (size > Tainted::kSize) {
+    heap->CreateFillerObjectAt(self->address() + Tainted::kSize,
+                               size - Tainted::kSize);
+  }
+
+  printf("Tainting object %s %p clone %p space %d\n", this->IsHeapObject() ?
+         TypeToString(HeapObject::cast(this)->map()->instance_type()) : "smi",
+         (void*) this, (void*)clone, space);
+
+  return self;
+}
+
+
+MaybeObject* Object::Taint() {
+  ASSERT(!this->IsTainted());
+
+  if (this->IsSpecObject()) {
+    // we object-taint (overwrite original objects) only those
+    // objects that can be passed by reference
+    return TaintObject();
+  } else {
+    return TaintReference();
+  }
+}
+
+
+Object* Object::UntaintReference() {
+  ASSERT(this->IsTainted());
+  Object* object = Tainted::cast(this)->tainted_object();
+  ASSERT(!object->IsSpecObject());
+  return object;
+}
+
+
+MaybeObject* Object::UntaintObject() {
+  ASSERT(this->IsTainted());
+  Tainted* tainted = Tainted::cast(this);
+  Object* object = tainted->tainted_object();
+  ASSERT(object->IsSpecObject());
+
+  HeapObject* heap_obj = HeapObject::cast(object);
+  Heap* heap = heap_obj->GetHeap();
+  int tainted_size = tainted->Size();
+  int obj_size = heap_obj->Size();
+  if (tainted_size < obj_size) {
+    // May happen if the original object has increased its
+    // size since it was initially tainted
+    Isolate* isolate = heap->isolate();
+    return isolate->Throw(*isolate->factory()->NewError(
+        "Tainted object is too small to hold the untainted object",
+        HandleVector<Object>(NULL, 0)));
+  }
+    
+  Address tainted_address = tainted->address();
+  // Shallow copy the object
+  heap->CopyBlock(tainted_address, heap_obj->address(), obj_size);
+  // Update write barrier for all fields that lie beyond the header.
+  heap->RecordWrites(tainted_address, Object::kHeaderSize,
+                     (obj_size - Object::kHeaderSize) / kPointerSize);
+
+  // Fill the remainder of the former tainted with dead wood.
+  if (tainted_size > obj_size) {
+    heap->CreateFillerObjectAt(tainted_address + obj_size,
+                               tainted_size - obj_size);
+  }
+
+  return this;
+}
+
+
+MaybeObject* Object::Untaint() {
+  ASSERT(this->IsTainted());
+  Object* object = Tainted::cast(this)->tainted_object();
+  // CLEAN(petr)
+  printf("Untainting %p\n", (void*)this);
+
+  // NOTE(petr): Tainted object continue live on the heap,
+  // and supposed to be freed by garbage collector
+  if (object->IsSpecObject()) {
+    return UntaintObject();
+  } else {
+    return UntaintReference();
   }
 }
 
@@ -1313,6 +1570,11 @@ void HeapObject::HeapObjectShortPrint(StringStream* accumulator) {
     case FOREIGN_TYPE:
       accumulator->Add("<Foreign>");
       break;
+    case TAINTED_TYPE:
+      accumulator->Add("<Tainted(<");
+      Tainted::cast(this)->tainted_object()->ShortPrint(accumulator);
+      accumulator->Add(")>");
+      break;
     case JS_GLOBAL_PROPERTY_CELL_TYPE:
       accumulator->Add("Cell for ");
       JSGlobalPropertyCell::cast(this)->value()->ShortPrint(accumulator);
@@ -1395,6 +1657,9 @@ void HeapObject::IterateBody(InstanceType type, int object_size,
       break;
     case FOREIGN_TYPE:
       reinterpret_cast<Foreign*>(this)->ForeignIterateBody(v);
+      break;
+    case TAINTED_TYPE:
+      Tainted::BodyDescriptor::IterateBody(this, object_size, v);
       break;
     case MAP_TYPE:
       Map::BodyDescriptor::IterateBody(this, v);
@@ -1959,6 +2224,52 @@ MaybeObject* JSObject::SetPropertyWithInterceptor(
 }
 
 
+MaybeObject* JSObject::SetPropertyWithInterceptorTaintCheck(
+    String* name,
+    Object* value,
+    PropertyAttributes attributes,
+    StrictModeFlag strict_mode) {
+  Isolate* isolate = GetIsolate();
+  if (!isolate->context()->HasTaintPolicyContext())
+    return SetPropertyWithInterceptor(name, value, attributes, strict_mode);
+
+  MaybeObject* result;
+  HandleScope scope(isolate);
+  Handle<JSObject> self(this);
+  Handle<String> name_handler(name);
+  Handle<Object> value_handler(value);
+  
+  Vector< Handle<Object> > args = Vector< Handle<Object> >::New(4);
+  args[0] = Handle<Object>::cast(
+      isolate->factory()->LookupAsciiSymbol("set"));
+  args[1] = Handle<Object>::cast(self);
+  args[2] = Handle<Object>::cast(name_handler);
+  args[3] = value_handler;
+
+  result = Execution::TaintPolicyCheck(isolate, args);
+  if (result) goto leave;
+
+  // TODO(petr): get rid of this assert if needed
+  ASSERT(!TaintPolicyHelper::HasTaintedArguments(args));
+
+  // args contain handle-locations of objects, replace the values
+  // within the handle-locations if the object is tatined
+  TaintPolicyHelper::UntaintArguments(args);
+
+  {
+    UntaintedContextScope ctx_scope(isolate->context());
+    result = self->SetPropertyWithInterceptor(*name_handler,
+                                              *value_handler,
+                                              attributes,
+                                              strict_mode);
+  }
+
+ leave:
+  args.Dispose();
+  return result;
+}
+
+
 MaybeObject* JSReceiver::SetProperty(String* name,
                                      Object* value,
                                      PropertyAttributes attributes,
@@ -2039,6 +2350,68 @@ MaybeObject* JSObject::SetPropertyWithCallback(Object* structure,
 }
 
 
+MaybeObject* JSObject::SetPropertyWithCallbackTaintCheck(
+    Object* structure,
+    String* name,
+    Object* value,
+    JSObject* holder,
+    StrictModeFlag strict_mode) {
+  Isolate* isolate = name->GetIsolate();
+  if (!isolate->context()->HasTaintPolicyContext())
+    return SetPropertyWithCallback(structure,
+                                   name,
+                                   value,
+                                   holder,
+                                   strict_mode);
+
+  // do not track __defineGetter__ and foreign callbacks
+  if (structure->IsFixedArray() || structure->IsForeign())
+    return SetPropertyWithCallback(structure,
+                                   name,
+                                   value,
+                                   holder,
+                                   strict_mode);
+
+  MaybeObject* result;
+  HandleScope scope(isolate);
+  Handle<JSObject> self(this);
+  Handle<Object> structure_handler(structure);
+  Handle<String> name_handler(name);
+  Handle<Object> value_handler(value);
+  Handle<JSObject> holder_handler(holder);
+  
+  Vector< Handle<Object> > args = Vector< Handle<Object> >::New(4);
+  args[0] = Handle<Object>::cast(
+      isolate->factory()->LookupAsciiSymbol("set"));
+  args[1] = Handle<Object>::cast(holder_handler);
+  args[2] = Handle<Object>::cast(name_handler);
+  args[3] = value_handler;
+
+  result = Execution::TaintPolicyCheck(isolate, args);
+  if (result) goto leave;
+
+  // TODO(petr): get rid of this assert if needed
+  ASSERT(!TaintPolicyHelper::HasTaintedArguments(args));
+
+  // args contain handle-locations of objects, replace the values
+  // within the handle-locations if the object is tatined
+  TaintPolicyHelper::UntaintArguments(args);
+
+  {
+    UntaintedContextScope ctx_scope(isolate->context());
+    result = self->SetPropertyWithCallback(*structure_handler,
+                                           *name_handler,
+                                           *value_handler,
+                                           *holder_handler,
+                                           strict_mode);
+  }
+
+ leave:
+  args.Dispose();
+  return result;
+}
+
+
 MaybeObject* JSReceiver::SetPropertyWithDefinedSetter(JSReceiver* setter,
                                                       Object* value) {
   Isolate* isolate = GetIsolate();
@@ -2111,11 +2484,11 @@ MaybeObject* JSObject::SetElementWithCallbackSetterInPrototypes(
       PropertyDetails details = dictionary->DetailsAt(entry);
       if (details.type() == CALLBACKS) {
         *found = true;
-        return SetElementWithCallback(dictionary->ValueAt(entry),
-                                      index,
-                                      value,
-                                      JSObject::cast(pt),
-                                      strict_mode);
+        return SetElementWithCallbackTaintCheck(dictionary->ValueAt(entry),
+                                                index,
+                                                value,
+                                                JSObject::cast(pt),
+                                                strict_mode);
       }
     }
   }
@@ -2137,7 +2510,8 @@ MaybeObject* JSObject::SetPropertyWithCallbackSetterInPrototypes(
   if (accessor_result.IsFound()) {
     *found = true;
     if (accessor_result.type() == CALLBACKS) {
-      return SetPropertyWithCallback(accessor_result.GetCallbackObject(),
+      return SetPropertyWithCallbackTaintCheck(
+                                     accessor_result.GetCallbackObject(),
                                      name,
                                      value,
                                      accessor_result.holder(),
@@ -2576,11 +2950,12 @@ MaybeObject* JSObject::SetPropertyWithFailedAccessCheck(
           if (obj->IsAccessorInfo()) {
             AccessorInfo* info = AccessorInfo::cast(obj);
             if (info->all_can_write()) {
-              return SetPropertyWithCallback(result->GetCallbackObject(),
-                                             name,
-                                             value,
-                                             result->holder(),
-                                             strict_mode);
+              return SetPropertyWithCallbackTaintCheck(
+                  result->GetCallbackObject(),
+                  name,
+                  value,
+                  result->holder(),
+                  strict_mode);
             }
           }
           break;
@@ -2976,13 +3351,16 @@ MaybeObject* JSObject::SetPropertyForResult(LookupResult* result,
       attributes = result->GetAttributes();
       return ConvertDescriptorToField(name, value, attributes);
     case CALLBACKS:
-      return SetPropertyWithCallback(result->GetCallbackObject(),
-                                     name,
-                                     value,
-                                     result->holder(),
-                                     strict_mode);
+      return SetPropertyWithCallbackTaintCheck(result->GetCallbackObject(),
+                                               name,
+                                               value,
+                                               result->holder(),
+                                               strict_mode);
     case INTERCEPTOR:
-      return SetPropertyWithInterceptor(name, value, attributes, strict_mode);
+      return SetPropertyWithInterceptorTaintCheck(name,
+                                                  value,
+                                                  attributes,
+                                                  strict_mode);
     case CONSTANT_TRANSITION: {
       // If the same constant function is being added we can simply
       // transition to the target map.
@@ -3801,6 +4179,43 @@ MaybeObject* JSObject::DeletePropertyWithInterceptor(String* name) {
 }
 
 
+MaybeObject* JSObject::DeletePropertyWithInterceptorTaintCheck(String* name) {
+  Isolate* isolate = GetIsolate();
+  if (!isolate->context()->HasTaintPolicyContext())
+    return DeletePropertyWithInterceptor(name);
+
+  MaybeObject* result;
+  HandleScope scope(isolate);
+  Handle<JSObject> self(this);
+  Handle<String> name_handler(name);
+
+  Vector< Handle<Object> > args = Vector< Handle<Object> >::New(3);
+  args[0] = Handle<Object>::cast(
+      isolate->factory()->LookupAsciiSymbol("del"));
+  args[1] = Handle<Object>::cast(self);
+  args[2] = Handle<Object>::cast(name_handler);
+
+  result = Execution::TaintPolicyCheck(isolate, args);
+  if (result) goto leave;
+
+  // TODO(petr): get rid of this assert if needed
+  ASSERT(!TaintPolicyHelper::HasTaintedArguments(args));
+
+  // args contain handle-locations of objects, replace the values
+  // within the handle-locations if the object is tatined
+  TaintPolicyHelper::UntaintArguments(args);
+
+  {
+    UntaintedContextScope ctx_scope(isolate->context());
+    result = self->DeletePropertyWithInterceptor(*name_handler);
+  }
+
+ leave:
+  args.Dispose();
+  return result;
+}
+
+
 MaybeObject* JSObject::DeleteElementWithInterceptor(uint32_t index) {
   Isolate* isolate = GetIsolate();
   Heap* heap = isolate->heap();
@@ -3837,6 +4252,42 @@ MaybeObject* JSObject::DeleteElementWithInterceptor(uint32_t index) {
 }
 
 
+MaybeObject* JSObject::DeleteElementWithInterceptorTaintCheck(uint32_t index) {
+  Isolate* isolate = GetIsolate();
+  if (!isolate->context()->HasTaintPolicyContext())
+    return DeleteElementWithInterceptor(index);
+
+  MaybeObject* result;
+  HandleScope scope(isolate);
+  Handle<JSObject> self(this);
+
+  Vector< Handle<Object> > args = Vector< Handle<Object> >::New(3);
+  args[0] = Handle<Object>::cast(
+      isolate->factory()->LookupAsciiSymbol("del"));
+  args[1] = Handle<Object>::cast(self);
+  args[2] = Handle<Object>(Smi::FromInt(index));
+
+  result = Execution::TaintPolicyCheck(isolate, args);
+  if (result) goto leave;
+
+  // TODO(petr): get rid of this assert if needed
+  ASSERT(!TaintPolicyHelper::HasTaintedArguments(args));
+
+  // args contain handle-locations of objects, replace the values
+  // within the handle-locations if the object is tatined
+  TaintPolicyHelper::UntaintArguments(args);
+
+  {
+    UntaintedContextScope ctx_scope(isolate->context());
+    result = self->DeleteElementWithInterceptor(index);
+  }
+
+ leave:
+  args.Dispose();
+  return result;
+}
+
+
 MaybeObject* JSObject::DeleteElement(uint32_t index, DeleteMode mode) {
   Isolate* isolate = GetIsolate();
   // Check access rights if needed.
@@ -3856,7 +4307,7 @@ MaybeObject* JSObject::DeleteElement(uint32_t index, DeleteMode mode) {
   if (HasIndexedInterceptor()) {
     // Skip interceptor if forcing deletion.
     if (mode != FORCE_DELETION) {
-      return DeleteElementWithInterceptor(index);
+      return DeleteElementWithInterceptorTaintCheck(index);
     }
     mode = JSReceiver::FORCE_DELETION;
   }
@@ -3924,7 +4375,7 @@ MaybeObject* JSObject::DeleteProperty(String* name, DeleteMode mode) {
       if (mode == FORCE_DELETION) {
         return DeletePropertyPostInterceptor(name, mode);
       }
-      return DeletePropertyWithInterceptor(name);
+      return DeletePropertyWithInterceptorTaintCheck(name);
     }
     // Normalize object if needed.
     Object* obj;
@@ -8910,6 +9361,54 @@ MaybeObject* JSObject::SetElementWithInterceptor(uint32_t index,
 }
 
 
+MaybeObject* JSObject::SetElementWithInterceptorTaintCheck(
+    uint32_t index,
+    Object* value,
+    StrictModeFlag strict_mode,
+    bool check_prototype) {
+  Isolate* isolate = GetIsolate();
+  if (!isolate->context()->HasTaintPolicyContext())
+    return SetElementWithInterceptor(index,
+                                     value,
+                                     strict_mode,
+                                     check_prototype);
+
+  MaybeObject* result;
+  HandleScope scope(isolate);
+  Handle<JSObject> self(this);
+  Handle<Object> value_handler(value);
+
+  Vector< Handle<Object> > args = Vector< Handle<Object> >::New(4);
+  args[0] = Handle<Object>::cast(
+      isolate->factory()->LookupAsciiSymbol("set"));
+  args[1] = Handle<Object>::cast(self);
+  args[2] = Handle<Object>(Smi::FromInt(index));
+  args[3] = value_handler;
+
+  result = Execution::TaintPolicyCheck(isolate, args);
+  if (result) goto leave;
+
+  // TODO(petr): get rid of this assert if needed
+  ASSERT(!TaintPolicyHelper::HasTaintedArguments(args));
+
+  // args contain handle-locations of objects, replace the values
+  // within the handle-locations if the object is tatined
+  TaintPolicyHelper::UntaintArguments(args);
+
+  {
+    UntaintedContextScope ctx_scope(isolate->context());
+    result = self->SetElementWithInterceptor(index,
+                                             *value_handler,
+                                             strict_mode,
+                                             check_prototype);
+  }
+
+ leave:
+  args.Dispose();
+  return result;
+}
+
+
 MaybeObject* JSObject::GetElementWithCallback(Object* receiver,
                                               Object* structure,
                                               uint32_t index,
@@ -8954,6 +9453,62 @@ MaybeObject* JSObject::GetElementWithCallback(Object* receiver,
 
   UNREACHABLE();
   return NULL;
+}
+
+
+MaybeObject* JSObject::GetElementWithCallbackTaintCheck(Object* receiver,
+                                                        Object* structure,
+                                                        uint32_t index,
+                                                        Object* holder) {
+  Isolate* isolate = GetIsolate();
+  if (!isolate->context()->HasTaintPolicyContext())
+    return GetElementWithCallback(receiver, structure, index, holder);
+
+  // do not track __defineGetter__ callbacks as they are
+  // javascript callbacks
+  if (structure->IsFixedArray())
+    return GetElementWithCallback(receiver, structure, index, holder);
+
+  MaybeObject* result;
+  bool taint = false;
+  HandleScope scope(isolate);
+  Handle<JSObject> self(this);
+  Handle<Object> receiver_handler(receiver);
+  Handle<Object> structure_handler(structure);
+  Handle<Object> holder_handler(holder);
+
+  Vector< Handle<Object> > args = Vector< Handle<Object> >::New(3);
+  args[0] = Handle<Object>::cast(
+      isolate->factory()->LookupAsciiSymbol("get"));
+  args[1] = holder_handler;
+  args[2] = Handle<Object>(Smi::FromInt(index));
+  
+  result = Execution::TaintPolicyCheck(isolate, args, &taint);
+  if (result) goto leave;
+
+  // TODO(petr): get rid of this assert if needed
+  ASSERT(!TaintPolicyHelper::HasTaintedArguments(args));
+
+  // args contain handle-locations of objects, replace the values
+  // within the handle-locations if the object is tatined
+  TaintPolicyHelper::UntaintArguments(args);
+
+  {
+    UntaintedContextScope ctx_scope(isolate->context());
+    result = self->GetElementWithCallback(*receiver_handler,
+                                          *structure_handler,
+                                          index,
+                                          *holder_handler);
+  }
+
+  Object* obj;
+  if (taint && result->ToObject(&obj)) {
+    result = obj->Taint();
+  }
+
+ leave:
+  args.Dispose();
+  return result;
 }
 
 
@@ -9019,6 +9574,68 @@ MaybeObject* JSObject::SetElementWithCallback(Object* structure,
 
   UNREACHABLE();
   return NULL;
+}
+
+
+MaybeObject* JSObject::SetElementWithCallbackTaintCheck(
+    Object* structure,
+    uint32_t index,
+    Object* value,
+    JSObject* holder,
+    StrictModeFlag strict_mode) {
+  Isolate* isolate = GetIsolate();
+  if (!isolate->context()->HasTaintPolicyContext())
+    return SetElementWithCallback(structure,
+                                  index,
+                                  value,
+                                  holder,
+                                  strict_mode);
+
+  // do not track __defineGetter__ callbacks as they are
+  // javascript callbacks
+  if (structure->IsFixedArray())
+    return SetElementWithCallback(structure,
+                                  index,
+                                  value,
+                                  holder,
+                                  strict_mode);
+
+  MaybeObject* result;
+  HandleScope scope(isolate);
+  Handle<JSObject> self(this);
+  Handle<Object> structure_handler(structure);
+  Handle<Object> value_handler(value);
+  Handle<JSObject> holder_handler(holder);
+
+  Vector< Handle<Object> > args = Vector< Handle<Object> >::New(4);
+  args[0] = Handle<Object>::cast(
+      isolate->factory()->LookupAsciiSymbol("set"));
+  args[1] = Handle<Object>::cast(holder_handler);
+  args[2] = Handle<Object>(Smi::FromInt(index));
+  args[3] = value_handler;
+
+  result = Execution::TaintPolicyCheck(isolate, args);
+  if (result) goto leave;
+
+  // TODO(petr): get rid of this assert if needed
+  ASSERT(!TaintPolicyHelper::HasTaintedArguments(args));
+
+  // args contain handle-locations of objects, replace the values
+  // within the handle-locations if the object is tatined
+  TaintPolicyHelper::UntaintArguments(args);
+
+  {
+    UntaintedContextScope ctx_scope(isolate->context());
+    result = self->SetElementWithCallback(*structure_handler,
+                                          index,
+                                          *value_handler,
+                                          *holder_handler,
+                                          strict_mode);
+  }
+
+ leave:
+  args.Dispose();
+  return result;
 }
 
 
@@ -9173,7 +9790,11 @@ MaybeObject* JSObject::SetDictionaryElement(uint32_t index,
     Object* element = dictionary->ValueAt(entry);
     PropertyDetails details = dictionary->DetailsAt(entry);
     if (details.type() == CALLBACKS) {
-      return SetElementWithCallback(element, index, value, this, strict_mode);
+      return SetElementWithCallbackTaintCheck(element,
+                                              index,
+                                              value,
+                                              this,
+                                              strict_mode);
     } else {
       dictionary->UpdateMaxNumberKey(index);
       // If put fails in strict mode, throw an exception.
@@ -9384,10 +10005,10 @@ MaybeObject* JSObject::SetElement(uint32_t index,
 
   // Check for lookup interceptor
   if (HasIndexedInterceptor()) {
-    return SetElementWithInterceptor(index,
-                                     value,
-                                     strict_mode,
-                                     check_prototype);
+    return SetElementWithInterceptorTaintCheck(index,
+                                               value,
+                                               strict_mode,
+                                               check_prototype);
   }
 
   return SetElementWithoutInterceptor(index,
@@ -9585,6 +10206,50 @@ MaybeObject* JSObject::GetElementWithInterceptor(Object* receiver,
   Object* pt = holder_handle->GetPrototype();
   if (pt == heap->null_value()) return heap->undefined_value();
   return pt->GetElementWithReceiver(*this_handle, index);
+}
+
+
+MaybeObject* JSObject::GetElementWithInterceptorTaintCheck(Object* receiver,
+                                                           uint32_t index) {
+  Isolate* isolate = GetIsolate();
+  if (!isolate->context()->HasTaintPolicyContext())
+    return GetElementWithInterceptor(receiver, index);
+
+  MaybeObject* result;
+  bool taint = false;
+  HandleScope scope(isolate);
+  Handle<JSObject> self(this);
+  Handle<Object> receiver_handler(receiver);
+
+  Vector< Handle<Object> > args = Vector< Handle<Object> >::New(3);
+  args[0] = Handle<Object>::cast(
+      isolate->factory()->LookupAsciiSymbol("get"));
+  args[1] = Handle<Object>::cast(self);
+  args[2] = Handle<Object>(Smi::FromInt(index));
+
+  result = Execution::TaintPolicyCheck(isolate, args, &taint);
+  if (result) goto leave;
+
+  // TODO(petr): get rid of this assert if needed
+  ASSERT(!TaintPolicyHelper::HasTaintedArguments(args));
+
+  // args contain handle-locations of objects, replace the values
+  // within the handle-locations if the object is tatined
+  TaintPolicyHelper::UntaintArguments(args);
+
+  {
+    UntaintedContextScope ctx_scope(isolate->context());
+    result = self->GetElementWithInterceptor(*receiver_handler, index);
+  }
+
+  Object* obj;
+  if (taint && result->ToObject(&obj)) {
+    result = obj->Taint();
+  }
+
+ leave:
+  args.Dispose();
+  return result;
 }
 
 
@@ -9856,6 +10521,55 @@ MaybeObject* JSObject::GetPropertyWithInterceptor(
       *name_handle,
       attributes);
   RETURN_IF_SCHEDULED_EXCEPTION(isolate);
+  return result;
+}
+
+
+MaybeObject* JSObject::GetPropertyWithInterceptorTaintCheck(
+    JSReceiver* receiver,
+    String* name,
+    PropertyAttributes* attributes) {
+  Isolate* isolate = GetIsolate();
+  if (!isolate->context()->HasTaintPolicyContext())
+    return GetPropertyWithInterceptor(receiver, name, attributes);
+ 
+  MaybeObject* result;
+  bool taint = false;
+  HandleScope scope(isolate);
+  Handle<JSObject> self(this);
+  Handle<JSReceiver> receiver_handler(receiver);
+  Handle<String> name_handler(name);
+
+  Vector< Handle<Object> > args = Vector< Handle<Object> >::New(3);
+  args[0] = Handle<Object>::cast(
+      isolate->factory()->LookupAsciiSymbol("get"));
+  args[1] = Handle<Object>::cast(self);
+  args[2] = Handle<Object>::cast(name_handler);
+
+  result = Execution::TaintPolicyCheck(isolate, args, &taint);
+  if (result) goto leave;
+
+  // TODO(petr): get rid of this assert if needed
+  ASSERT(!TaintPolicyHelper::HasTaintedArguments(args));
+
+  // args contain handle-locations of objects, replace the values
+  // within the handle-locations if the object is tatined
+  TaintPolicyHelper::UntaintArguments(args);
+
+  {
+    UntaintedContextScope ctx_scope(isolate->context());
+    result = self->GetPropertyWithInterceptor(*receiver_handler,
+                                              *name_handler,
+                                              attributes);
+  }
+
+  Object* obj;
+  if (taint && result->ToObject(&obj)) {
+    result = obj->Taint();
+  }
+
+ leave:
+  args.Dispose();
   return result;
 }
 

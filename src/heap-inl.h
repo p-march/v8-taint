@@ -185,6 +185,29 @@ MaybeObject* Heap::CopyFixedDoubleArray(FixedDoubleArray* src) {
 
 
 MaybeObject* Heap::AllocateRaw(int size_in_bytes,
+                               AllocationSpace space) {
+  MaybeObject* result;
+  if (NEW_SPACE == space) {
+    result = new_space_.AllocateRaw(size_in_bytes);
+  } else if (OLD_POINTER_SPACE == space) {
+    result = old_pointer_space_->AllocateRaw(size_in_bytes);
+  } else if (OLD_DATA_SPACE == space) {
+    result = old_data_space_->AllocateRaw(size_in_bytes);
+  } else if (CODE_SPACE == space) {
+    result = code_space_->AllocateRaw(size_in_bytes);
+  } else if (LO_SPACE == space) {
+    result = lo_space_->AllocateRaw(size_in_bytes, NOT_EXECUTABLE);
+  } else if (CELL_SPACE == space) {
+    result = cell_space_->AllocateRaw(size_in_bytes);
+  } else {
+    ASSERT(MAP_SPACE == space);
+    result = map_space_->AllocateRaw(size_in_bytes);
+  }
+  return result;
+}
+
+
+MaybeObject* Heap::AllocateRaw(int size_in_bytes,
                                AllocationSpace space,
                                AllocationSpace retry_space) {
   ASSERT(allocation_allowed_ && gc_state_ == NOT_IN_GC);
@@ -203,7 +226,7 @@ MaybeObject* Heap::AllocateRaw(int size_in_bytes,
 #endif
   MaybeObject* result;
   if (NEW_SPACE == space) {
-    result = new_space_.AllocateRaw(size_in_bytes);
+    result = AllocateRaw(size_in_bytes, space);
     if (always_allocate() && result->IsFailure()) {
       space = retry_space;
     } else {
@@ -211,20 +234,7 @@ MaybeObject* Heap::AllocateRaw(int size_in_bytes,
     }
   }
 
-  if (OLD_POINTER_SPACE == space) {
-    result = old_pointer_space_->AllocateRaw(size_in_bytes);
-  } else if (OLD_DATA_SPACE == space) {
-    result = old_data_space_->AllocateRaw(size_in_bytes);
-  } else if (CODE_SPACE == space) {
-    result = code_space_->AllocateRaw(size_in_bytes);
-  } else if (LO_SPACE == space) {
-    result = lo_space_->AllocateRaw(size_in_bytes, NOT_EXECUTABLE);
-  } else if (CELL_SPACE == space) {
-    result = cell_space_->AllocateRaw(size_in_bytes);
-  } else {
-    ASSERT(MAP_SPACE == space);
-    result = map_space_->AllocateRaw(size_in_bytes);
-  }
+  result = AllocateRaw(size_in_bytes, space);
   if (result->IsFailure()) old_gen_exhausted_ = true;
   return result;
 }

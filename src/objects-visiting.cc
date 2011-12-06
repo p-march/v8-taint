@@ -128,6 +128,9 @@ StaticVisitorBase::VisitorId StaticVisitorBase::GetVisitorId(
                                  kVisitDataObjectGeneric,
                                  Foreign::kSize);
 
+    case TAINTED_TYPE:
+      return kVisitTainted;
+
     case FILLER_TYPE:
       return kVisitDataObjectGeneric;
 

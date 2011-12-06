@@ -537,6 +537,16 @@ HConstant* HGraph::GetConstantFalse() {
 }
 
 
+HConstant* HGraph::GetConstantTaintedTrue() {
+  return GetConstant(&constant_true_, isolate()->heap()->tainted_true_value());
+}
+
+
+HConstant* HGraph::GetConstantTaintedFalse() {
+  return GetConstant(&constant_false_, isolate()->heap()->tainted_false_value());
+}
+
+
 HConstant* HGraph::GetConstantHole() {
   return GetConstant(&constant_hole_, isolate()->heap()->the_hole_value());
 }
@@ -6353,6 +6363,69 @@ void HGraphBuilder::GenerateIsConstructCall(CallRuntime* call) {
     return ast_context()->ReturnControl(new(zone()) HIsConstructCallAndBranch,
                                         call->id());
   }
+}
+
+
+void HGraphBuilder::GenerateIsTainted(CallRuntime* call) {
+  ASSERT(call->arguments()->length() == 1);
+  CHECK_ALIVE(VisitForValue(call->arguments()->at(0)));
+  HValue* value = Pop();
+  HHasInstanceTypeAndBranch* result =
+      new(zone()) HHasInstanceTypeAndBranch(value, TAINTED_TYPE);
+  return ast_context()->ReturnControl(result, call->id());
+}
+
+
+void HGraphBuilder::GenerateTaintNot(CallRuntime* call) {
+  ASSERT(call->arguments()->length() == 1);
+  CHECK_ALIVE(VisitForValue(call->arguments()->at(0)));
+  HValue* value = Pop();
+
+  HHasInstanceTypeAndBranch* taintcheck =
+      new(zone()) HHasInstanceTypeAndBranch(value, TAINTED_TYPE);
+  HBasicBlock* tainted = graph()->CreateBasicBlock();
+  HBasicBlock* not_tainted = graph()->CreateBasicBlock();
+  HBasicBlock* join = graph()->CreateBasicBlock();
+  taintcheck->SetSuccessorAt(0, tainted);
+  taintcheck->SetSuccessorAt(1, not_tainted);
+  current_block()->Finish(taintcheck);
+
+  set_current_block(tainted);
+  HBasicBlock* tainted_true = graph()->CreateBasicBlock();
+  HBasicBlock* tainted_false = graph()->CreateBasicBlock();
+  HBranch* taint_test = new(zone()) HBranch(value, tainted_true, tainted_false);
+  taint_test->SetSuccessorAt(0, tainted_true);
+  taint_test->SetSuccessorAt(1, tainted_false);
+  current_block()->Finish(taint_test);
+
+  set_current_block(tainted_true);
+  Push(graph()->GetConstantTaintedFalse());
+  tainted_true->Goto(join);
+
+  set_current_block(tainted_false);
+  Push(graph()->GetConstantTaintedTrue());
+  tainted_false->Goto(join);
+
+  set_current_block(not_tainted);
+  HBasicBlock* not_tainted_true = graph()->CreateBasicBlock();
+  HBasicBlock* not_tainted_false = graph()->CreateBasicBlock();
+  HBranch* not_taint_test = new(zone()) HBranch(value, not_tainted_true, not_tainted_false);
+  not_taint_test->SetSuccessorAt(0, not_tainted_true);
+  not_taint_test->SetSuccessorAt(1, not_tainted_false);
+  current_block()->Finish(not_taint_test);
+
+  set_current_block(not_tainted_true);
+  Push(graph()->GetConstantFalse());
+  not_tainted_true->Goto(join);
+
+  set_current_block(not_tainted_false);
+  Push(graph()->GetConstantTrue());
+  not_tainted_false->Goto(join);
+
+  
+  join->SetJoinId(call->id());
+  set_current_block(join);
+  return ast_context()->ReturnValue(Pop());
 }
 
 

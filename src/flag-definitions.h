@@ -518,6 +518,10 @@ DEFINE_bool(sliding_state_window, false,
 DEFINE_string(logfile, "v8.log", "Specify the name of the log file.")
 DEFINE_bool(ll_prof, false, "Enable low-level linux profiler.")
 
+// Taint
+DEFINE_bool(taint_policy, false, "Enable taint tracking")
+DEFINE_string(taint_policy_file, "taint_policy.js", "Specify the name of the taint policy file.")
+
 //
 // Disassembler only flags
 //
