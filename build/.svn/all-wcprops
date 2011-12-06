@@ -1,0 +1,47 @@
+K 25
+svn:wc:ra_dav:version-url
+V 48
+/svn/!svn/ver/10057/branches/bleeding_edge/build
+END
+common.gypi
+K 25
+svn:wc:ra_dav:version-url
+V 60
+/svn/!svn/ver/10057/branches/bleeding_edge/build/common.gypi
+END
+standalone.gypi
+K 25
+svn:wc:ra_dav:version-url
+V 63
+/svn/!svn/ver/9940/branches/bleeding_edge/build/standalone.gypi
+END
+mipsu.gypi
+K 25
+svn:wc:ra_dav:version-url
+V 58
+/svn/!svn/ver/9940/branches/bleeding_edge/build/mipsu.gypi
+END
+all.gyp
+K 25
+svn:wc:ra_dav:version-url
+V 55
+/svn/!svn/ver/9094/branches/bleeding_edge/build/all.gyp
+END
+README.txt
+K 25
+svn:wc:ra_dav:version-url
+V 58
+/svn/!svn/ver/9227/branches/bleeding_edge/build/README.txt
+END
+armu.gypi
+K 25
+svn:wc:ra_dav:version-url
+V 57
+/svn/!svn/ver/8840/branches/bleeding_edge/build/armu.gypi
+END
+gyp_v8
+K 25
+svn:wc:ra_dav:version-url
+V 54
+/svn/!svn/ver/9940/branches/bleeding_edge/build/gyp_v8
+END

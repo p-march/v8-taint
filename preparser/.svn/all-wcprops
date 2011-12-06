@@ -1,0 +1,23 @@
+K 25
+svn:wc:ra_dav:version-url
+V 51
+/svn/!svn/ver/9617/branches/bleeding_edge/preparser
+END
+preparser.gyp
+K 25
+svn:wc:ra_dav:version-url
+V 65
+/svn/!svn/ver/9019/branches/bleeding_edge/preparser/preparser.gyp
+END
+preparser-process.cc
+K 25
+svn:wc:ra_dav:version-url
+V 72
+/svn/!svn/ver/9617/branches/bleeding_edge/preparser/preparser-process.cc
+END
+SConscript
+K 25
+svn:wc:ra_dav:version-url
+V 62
+/svn/!svn/ver/8555/branches/bleeding_edge/preparser/SConscript
+END

@@ -1,0 +1,29 @@
+K 25
+svn:wc:ra_dav:version-url
+V 58
+/svn/!svn/ver/10155/branches/bleeding_edge/test/es5conform
+END
+es5conform.status
+K 25
+svn:wc:ra_dav:version-url
+V 76
+/svn/!svn/ver/10155/branches/bleeding_edge/test/es5conform/es5conform.status
+END
+harness-adapt.js
+K 25
+svn:wc:ra_dav:version-url
+V 74
+/svn/!svn/ver/5921/branches/bleeding_edge/test/es5conform/harness-adapt.js
+END
+testcfg.py
+K 25
+svn:wc:ra_dav:version-url
+V 68
+/svn/!svn/ver/8739/branches/bleeding_edge/test/es5conform/testcfg.py
+END
+README
+K 25
+svn:wc:ra_dav:version-url
+V 64
+/svn/!svn/ver/5921/branches/bleeding_edge/test/es5conform/README
+END

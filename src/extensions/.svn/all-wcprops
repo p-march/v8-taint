@@ -1,0 +1,29 @@
+K 25
+svn:wc:ra_dav:version-url
+V 57
+/svn/!svn/ver/10028/branches/bleeding_edge/src/extensions
+END
+gc-extension.cc
+K 25
+svn:wc:ra_dav:version-url
+V 73
+/svn/!svn/ver/10028/branches/bleeding_edge/src/extensions/gc-extension.cc
+END
+gc-extension.h
+K 25
+svn:wc:ra_dav:version-url
+V 71
+/svn/!svn/ver/5921/branches/bleeding_edge/src/extensions/gc-extension.h
+END
+externalize-string-extension.cc
+K 25
+svn:wc:ra_dav:version-url
+V 88
+/svn/!svn/ver/9665/branches/bleeding_edge/src/extensions/externalize-string-extension.cc
+END
+externalize-string-extension.h
+K 25
+svn:wc:ra_dav:version-url
+V 87
+/svn/!svn/ver/5921/branches/bleeding_edge/src/extensions/externalize-string-extension.h
+END

@@ -1,0 +1,12 @@
+K 13
+svn:eol-style
+V 6
+native
+K 13
+svn:mergeinfo
+V 354
+/branches/bleeding_edge/test/mjsunit/global-load-from-eval-in-with.js:1170-1260,1262-1276,1278-1297
+/branches/experimental/gc/test/mjsunit/global-load-from-eval-in-with.js:6007-9327
+/branches/experimental/isolates/test/mjsunit/global-load-from-eval-in-with.js:4735-7267
+/branches/experimental/toiger/test/mjsunit/global-load-from-eval-in-with.js:665-1384
+END

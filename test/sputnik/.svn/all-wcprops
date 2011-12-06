@@ -1,0 +1,23 @@
+K 25
+svn:wc:ra_dav:version-url
+V 55
+/svn/!svn/ver/10155/branches/bleeding_edge/test/sputnik
+END
+sputnik.status
+K 25
+svn:wc:ra_dav:version-url
+V 70
+/svn/!svn/ver/10155/branches/bleeding_edge/test/sputnik/sputnik.status
+END
+testcfg.py
+K 25
+svn:wc:ra_dav:version-url
+V 65
+/svn/!svn/ver/8739/branches/bleeding_edge/test/sputnik/testcfg.py
+END
+README
+K 25
+svn:wc:ra_dav:version-url
+V 61
+/svn/!svn/ver/8474/branches/bleeding_edge/test/sputnik/README
+END

@@ -1,0 +1,12 @@
+K 13
+svn:eol-style
+V 6
+native
+K 13
+svn:mergeinfo
+V 292
+/branches/experimental/gc/test/mjsunit/regress/regress-269.js:6007-9327
+/branches/experimental/isolates/test/mjsunit/regress/regress-269.js:4735-7267
+/branches/experimental/toiger/test/mjsunit/bugs/bug-269.js:665-1384
+/branches/experimental/toiger/test/mjsunit/regress/regress-269.js:665-1384
+END

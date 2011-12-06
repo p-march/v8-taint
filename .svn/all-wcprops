@@ -1,0 +1,59 @@
+K 25
+svn:wc:ra_dav:version-url
+V 42
+/svn/!svn/ver/10182/branches/bleeding_edge
+END
+LICENSE
+K 25
+svn:wc:ra_dav:version-url
+V 49
+/svn/!svn/ver/6383/branches/bleeding_edge/LICENSE
+END
+AUTHORS
+K 25
+svn:wc:ra_dav:version-url
+V 49
+/svn/!svn/ver/9264/branches/bleeding_edge/AUTHORS
+END
+.gitignore
+K 25
+svn:wc:ra_dav:version-url
+V 52
+/svn/!svn/ver/9182/branches/bleeding_edge/.gitignore
+END
+LICENSE.valgrind
+K 25
+svn:wc:ra_dav:version-url
+V 58
+/svn/!svn/ver/6593/branches/bleeding_edge/LICENSE.valgrind
+END
+ChangeLog
+K 25
+svn:wc:ra_dav:version-url
+V 52
+/svn/!svn/ver/10104/branches/bleeding_edge/ChangeLog
+END
+SConstruct
+K 25
+svn:wc:ra_dav:version-url
+V 53
+/svn/!svn/ver/10008/branches/bleeding_edge/SConstruct
+END
+LICENSE.strongtalk
+K 25
+svn:wc:ra_dav:version-url
+V 60
+/svn/!svn/ver/6593/branches/bleeding_edge/LICENSE.strongtalk
+END
+Makefile
+K 25
+svn:wc:ra_dav:version-url
+V 50
+/svn/!svn/ver/9943/branches/bleeding_edge/Makefile
+END
+LICENSE.v8
+K 25
+svn:wc:ra_dav:version-url
+V 52
+/svn/!svn/ver/6593/branches/bleeding_edge/LICENSE.v8
+END

@@ -1,0 +1,26 @@
+K 10
+svn:ignore
+V 296
+d8_js2c.vcproj
+js2c.vcproj
+mksnapshot.vcproj
+v8.log
+v8.sln
+v8.vcproj
+v8_base.vcproj
+v8_nosnapshot.vcproj
+v8_snapshot.vcproj
+v8_shell.vcproj
+SConstruct
+d8_js2c.scons
+js2c.scons
+mksnapshot.scons
+v8.scons
+v8_base.scons
+v8_main.scons
+v8_nosnapshot.scons
+v8_snapshot.scons
+v8_shell.scons
+v8.xcodeproj
+
+END
