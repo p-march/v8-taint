@@ -3190,8 +3190,10 @@ void CompareStub::Generate(MacroAssembler* masm) {
   // NOTE(petr): taint needs to be propagated for implicit information control
   // jump to slow path if input is tainted
   Label tainted;
-  __ JumpIfTainted(rax, &tainted);
-  __ JumpIfTainted(rdx, &tainted);
+  if (FLAG_taint_policy) {
+    __ JumpIfTainted(rax, &tainted);
+    __ JumpIfTainted(rdx, &tainted);
+  }
   
   // Compare two smis if required.
   if (include_smi_compare_) {
@@ -3437,7 +3439,9 @@ void CompareStub::Generate(MacroAssembler* masm) {
     __ bind(&not_both_objects);
   }
 
-  __ bind(&tainted);
+  if (FLAG_taint_policy) {
+    __ bind(&tainted);
+  }
 
   // Push arguments below the return address to prepare jump to builtin.
   __ pop(rcx);

@@ -2223,6 +2223,16 @@ void MacroAssembler::JumpIfTainted(Register src,
 }
 
 
+void MacroAssembler::JumpIfNotTainted(Register src,
+                                      Register scratch,
+                                      Label* on_not_tainted,
+                                      Label::Distance near_jump) {
+  JumpIfSmi(src, on_not_tainted, near_jump);
+  Condition tainted = CheckTainted(src, scratch);
+  j(NegateCondition(tainted), on_not_tainted, near_jump);
+}
+
+
 void MacroAssembler::Untaint(Register src, Register scratch) {
   ASSERT(!src.is(scratch));
   Label not_tainted;

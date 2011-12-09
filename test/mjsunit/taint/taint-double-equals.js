@@ -31,7 +31,7 @@
  * implementation of assertEquals.
  */
 
-// Flags: --allow-natives-syntax
+// Flags: --allow_natives_syntax --taint_policy
 
 function IsTainted(x) {
   return %_IsTainted(x);

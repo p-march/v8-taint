@@ -65,7 +65,7 @@ namespace internal {
 
 // CLEAN(petr):
 #define RUNTIME_ASSERT(value) \
-  if (!(value)) {ASSERT(0); return isolate->ThrowIllegalOperation();}
+  if (!(value)) {return isolate->ThrowIllegalOperation();}
 
 // Cast the given object to a value of the specified type and store
 // it in a variable with the given name.  If the object is not of the
@@ -13780,6 +13780,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_IS_VAR) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_Taint) {
+  ASSERT(FLAG_taint_policy);
   HandleScope scope(isolate);
   ASSERT(args.length() == 1);
   Object* object = args[0];
@@ -13794,6 +13795,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_Taint) {
 
 MUST_USE_RESULT static MaybeObject* DeepTaint(Isolate* isolate,
                                               Object* object) {
+  ASSERT(FLAG_taint_policy);
   HandleScope scope(isolate);
   bool result_tainted = false;
   Object* result = object;

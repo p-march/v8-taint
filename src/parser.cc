@@ -2908,7 +2908,9 @@ Expression* Parser::ParseUnaryExpression(bool* ok) {
       }
     }
 
-    if (op == Token::NOT) {
+    if (op == Token::NOT && FLAG_taint_policy) {
+      // substitute unary operation NOT with a call to inline function TaintNot
+      // we need this to propagate taint if the argument is tainted
       ZoneList<Expression*>* args = new(zone()) ZoneList<Expression*>(1);
       args->Add(expression);
       Handle<String> name = isolate()->factory()->NewStringFromUtf8(CStrVector("_TaintNot"), TENURED);

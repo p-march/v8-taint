@@ -509,26 +509,26 @@ void FullCodeGenerator::EffectContext::Plug(Label* materialize_true,
 void FullCodeGenerator::AccumulatorValueContext::Plug(
     Label* materialize_true,
     Label* materialize_false) const {
-    Label done;
-    __ bind(materialize_true);
-    __ Move(result_register(), isolate()->factory()->true_value());
-    __ jmp(&done, Label::kNear);
-    __ bind(materialize_false);
-    __ Move(result_register(), isolate()->factory()->false_value());
-    __ bind(&done);
+  Label done;
+  __ bind(materialize_true);
+  __ Move(result_register(), isolate()->factory()->true_value());
+  __ jmp(&done, Label::kNear);
+  __ bind(materialize_false);
+  __ Move(result_register(), isolate()->factory()->false_value());
+  __ bind(&done);
 }
 
 
 void FullCodeGenerator::StackValueContext::Plug(
     Label* materialize_true,
     Label* materialize_false) const {
-    Label done;
-    __ bind(materialize_true);
-    __ Push(isolate()->factory()->true_value());
-    __ jmp(&done, Label::kNear);
-    __ bind(materialize_false);
-    __ Push(isolate()->factory()->false_value());
-    __ bind(&done);
+  Label done;
+  __ bind(materialize_true);
+  __ Push(isolate()->factory()->true_value());
+  __ jmp(&done, Label::kNear);
+  __ bind(materialize_false);
+  __ Push(isolate()->factory()->false_value());
+  __ bind(&done);
 }
 
 
@@ -575,10 +575,9 @@ void FullCodeGenerator::DoTest(Expression* condition,
                                Label* if_false,
                                Label* fall_through) {
   ToBooleanStub stub(result_register());
-
-    __ push(result_register());
-    __ CallStub(&stub);
-    __ testq(result_register(), result_register());
+  __ push(result_register());
+  __ CallStub(&stub);
+  __ testq(result_register(), result_register());
   // The stub returns nonzero for true.
   Split(not_zero, if_true, if_false, fall_through);
 }
@@ -2293,7 +2292,9 @@ void FullCodeGenerator::EmitIsSmi(CallRuntime* expr) {
                          &if_true, &if_false, &fall_through);
 
   PrepareForBailoutBeforeSplit(expr, true, if_true, if_false);
-  __ Untaint(rax);
+  if (FLAG_taint_policy) {
+    __ Untaint(rax);
+  }
   __ JumpIfSmi(rax, if_true);
   __ jmp(if_false);
 
@@ -2315,7 +2316,9 @@ void FullCodeGenerator::EmitIsNonNegativeSmi(CallRuntime* expr) {
                          &if_true, &if_false, &fall_through);
 
   PrepareForBailoutBeforeSplit(expr, true, if_true, if_false);
-  __ Untaint(rax);
+  if (FLAG_taint_policy) {
+    __ Untaint(rax);
+  }
   Condition non_negative_smi = masm()->CheckNonNegativeSmi(rax);
   Split(non_negative_smi, if_true, if_false, fall_through);
 
@@ -2336,7 +2339,9 @@ void FullCodeGenerator::EmitIsObject(CallRuntime* expr) {
   context()->PrepareTest(&materialize_true, &materialize_false,
                          &if_true, &if_false, &fall_through);
 
-  __ Untaint(rax);
+  if (FLAG_taint_policy) {
+    __ Untaint(rax);
+  }
   __ JumpIfSmi(rax, if_false);
   __ CompareRoot(rax, Heap::kNullValueRootIndex);
   __ j(equal, if_true);
@@ -2369,7 +2374,9 @@ void FullCodeGenerator::EmitIsSpecObject(CallRuntime* expr) {
   context()->PrepareTest(&materialize_true, &materialize_false,
                          &if_true, &if_false, &fall_through);
 
-  __ Untaint(rax);
+  if (FLAG_taint_policy) {
+    __ Untaint(rax);
+  }
   __ JumpIfSmi(rax, if_false);
   __ CmpObjectType(rax, FIRST_SPEC_OBJECT_TYPE, rbx);
   PrepareForBailoutBeforeSplit(expr, true, if_true, if_false);
@@ -2392,7 +2399,9 @@ void FullCodeGenerator::EmitIsUndetectableObject(CallRuntime* expr) {
   context()->PrepareTest(&materialize_true, &materialize_false,
                          &if_true, &if_false, &fall_through);
 
-  __ Untaint(rax);
+  if (FLAG_taint_policy) {
+    __ Untaint(rax);
+  }
   __ JumpIfSmi(rax, if_false);
   __ movq(rbx, FieldOperand(rax, HeapObject::kMapOffset));
   __ testb(FieldOperand(rbx, Map::kBitFieldOffset),
@@ -2422,7 +2431,9 @@ void FullCodeGenerator::EmitIsStringWrapperSafeForDefaultValueOf(
 
   // Check whether this map has already been checked to be safe for default
   // valueOf.
-  __ Untaint(rax);
+  if (FLAG_taint_policy) {
+    __ Untaint(rax);
+  }
   __ movq(rbx, FieldOperand(rax, HeapObject::kMapOffset));
   __ testb(FieldOperand(rbx, Map::kBitField2Offset),
            Immediate(1 << Map::kStringWrapperSafeForDefaultValueOf));
@@ -2501,7 +2512,9 @@ void FullCodeGenerator::EmitIsFunction(CallRuntime* expr) {
   context()->PrepareTest(&materialize_true, &materialize_false,
                          &if_true, &if_false, &fall_through);
 
-  __ Untaint(rax);
+  if (FLAG_taint_policy) {
+    __ Untaint(rax);
+  }
   __ JumpIfSmi(rax, if_false);
   __ CmpObjectType(rax, JS_FUNCTION_TYPE, rbx);
   PrepareForBailoutBeforeSplit(expr, true, if_true, if_false);
@@ -2524,7 +2537,9 @@ void FullCodeGenerator::EmitIsArray(CallRuntime* expr) {
   context()->PrepareTest(&materialize_true, &materialize_false,
                          &if_true, &if_false, &fall_through);
 
-  __ Untaint(rax);
+  if (FLAG_taint_policy) {
+    __ Untaint(rax);
+  }
   __ JumpIfSmi(rax, if_false);
   __ CmpObjectType(rax, JS_ARRAY_TYPE, rbx);
   PrepareForBailoutBeforeSplit(expr, true, if_true, if_false);
@@ -2547,7 +2562,9 @@ void FullCodeGenerator::EmitIsRegExp(CallRuntime* expr) {
   context()->PrepareTest(&materialize_true, &materialize_false,
                          &if_true, &if_false, &fall_through);
 
-  __ Untaint(rax);
+  if (FLAG_taint_policy) {
+    __ Untaint(rax);
+  }
   __ JumpIfSmi(rax, if_false);
   __ CmpObjectType(rax, JS_REGEXP_TYPE, rbx);
   PrepareForBailoutBeforeSplit(expr, true, if_true, if_false);
@@ -2612,43 +2629,45 @@ void FullCodeGenerator::EmitIsTainted(CallRuntime* expr) {
 
 
 void FullCodeGenerator::EmitTaintNot(CallRuntime* expr) {
+  ASSERT(FLAG_taint_policy);
   ZoneList<Expression*>* args = expr->arguments();
   ASSERT(args->length() == 1);
+  Register result = result_register();
 
   VisitForAccumulatorValue(args->at(0));
 
   Label not_tainted, done;
-  __ JumpIfNotTainted(result_register(), &not_tainted); 
+  __ JumpIfNotTainted(result, &not_tainted); 
   {
     Label tainted_true;
-    ToBooleanStub stub(result_register());
-    __ Untaint(result_register(), result_register());
-    __ push(result_register());
+    ToBooleanStub stub(result);
+    __ Untaint(result);
+    __ push(result);
     __ CallStub(&stub);
-    __ testq(result_register(), result_register());
+    __ testq(result, result);
     __ j(zero, &tainted_true);
-    __ Move(result_register(), isolate()->factory()->tainted_false_value());
+    __ Move(result, isolate()->factory()->tainted_false_value());
     __ jmp(&done);
     __ bind(&tainted_true);
-    __ Move(result_register(), isolate()->factory()->tainted_true_value());
+    __ Move(result, isolate()->factory()->tainted_true_value());
     __ jmp(&done);
   }
   
   __ bind(&not_tainted);
   {
     Label not_tainted_true;
-    ToBooleanStub stub(result_register());
-    __ push(result_register());
+    ToBooleanStub stub(result);
+    __ push(result);
     __ CallStub(&stub);
-    __ testq(result_register(), result_register());
+    __ testq(result, result);
     __ j(zero, &not_tainted_true);
-    __ Move(result_register(), isolate()->factory()->false_value());
+    __ Move(result, isolate()->factory()->false_value());
     __ jmp(&done);
     __ bind(&not_tainted_true);
-    __ Move(result_register(), isolate()->factory()->true_value());
+    __ Move(result, isolate()->factory()->true_value());
   }
   __ bind(&done);
-  context()->Plug(rax);
+  context()->Plug(result);
 }
 
 
@@ -2668,8 +2687,10 @@ void FullCodeGenerator::EmitObjectEquals(CallRuntime* expr) {
                          &if_true, &if_false, &fall_through);
 
   __ pop(rbx);
-  __ Untaint(rax);
-  __ Untaint(rbx);
+  if (FLAG_taint_policy) {
+    __ Untaint(rax);
+    __ Untaint(rbx);
+  }
   __ cmpq(rax, rbx);
   PrepareForBailoutBeforeSplit(expr, true, if_true, if_false);
   Split(equal, if_true, if_false, fall_through);
@@ -2722,7 +2743,10 @@ void FullCodeGenerator::EmitClassOf(CallRuntime* expr) {
   Label done, null, function, non_function_constructor;
 
   VisitForAccumulatorValue(args->at(0));
-  __ Untaint(rax);
+
+  if (FLAG_taint_policy) {
+    __ Untaint(rax);
+  }
 
   // If the object is a smi, we return null.
   __ JumpIfSmi(rax, &null);
@@ -2878,7 +2902,9 @@ void FullCodeGenerator::EmitValueOf(CallRuntime* expr) {
   VisitForAccumulatorValue(args->at(0));  // Load the object.
 
   Label done;
-  __ Untaint(rax);
+  if (FLAG_taint_policy) {
+    __ Untaint(rax);
+  }
   // If the object is a smi return the object.
   __ JumpIfSmi(rax, &done);
   // If the object is not a value type, return the object.
@@ -3391,7 +3417,10 @@ void FullCodeGenerator::EmitHasCachedArrayIndex(CallRuntime* expr) {
                          &if_true, &if_false, &fall_through);
 
   // NOTE(petr): force to go slow-path
-  __ JumpIfTainted(rax, if_false);
+  if (FLAG_taint_policy) {
+    __ JumpIfTainted(rax, if_false);
+  }
+
   __ testl(FieldOperand(rax, String::kHashFieldOffset),
            Immediate(String::kContainsCachedArrayIndexMask));
   PrepareForBailoutBeforeSplit(expr, true, if_true, if_false);
@@ -4129,7 +4158,10 @@ void FullCodeGenerator::EmitLiteralCompareTypeof(Expression* expr,
     VisitForTypeofValue(sub_expr);
   }
   PrepareForBailoutBeforeSplit(expr, true, if_true, if_false);
-  __ Untaint(rax);
+
+  if (FLAG_taint_policy) {
+    __ Untaint(rax);
+  }
 
   if (check->Equals(isolate()->heap()->number_symbol())) {
     __ JumpIfSmi(rax, if_true);
@@ -4162,7 +4194,6 @@ void FullCodeGenerator::EmitLiteralCompareTypeof(Expression* expr,
     __ testb(FieldOperand(rdx, Map::kBitFieldOffset),
              Immediate(1 << Map::kIsUndetectable));
     Split(not_zero, if_true, if_false, fall_through);
-
   } else if (check->Equals(isolate()->heap()->function_symbol())) {
     __ JumpIfSmi(rax, if_false);
     STATIC_ASSERT(NUM_OF_CALLABLE_SPEC_OBJECT_TYPES == 2);

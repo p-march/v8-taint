@@ -1269,7 +1269,11 @@ void LCodeGen::DoValueOf(LValueOf* instr) {
   Register temp = ToRegister(instr->TempAt(0));
   ASSERT(input.is(result));
   Label done;
-  __ Untaint(input, temp);
+
+  if (FLAG_taint_policy) {
+    __ Untaint(input, temp);
+  }
+
   // If the object is a smi return the object.
   __ JumpIfSmi(input, &done, Label::kNear);
 
@@ -1658,7 +1662,10 @@ Condition LCodeGen::EmitIsObject(Register input,
                                  Register temp1,
                                  Label* is_not_object,
                                  Label* is_object) {
-  __ Untaint(input, temp1);
+  if (FLAG_taint_policy) {
+    __ Untaint(input, temp1);
+  }
+
   __ JumpIfSmi(input, is_not_object);
 
   __ cmp(input, isolate()->factory()->null_value());
@@ -1802,17 +1809,24 @@ static Condition BranchCondition(HHasInstanceTypeAndBranch* instr) {
 
 void LCodeGen::DoHasInstanceTypeAndBranch(LHasInstanceTypeAndBranch* instr) {
   Register input = ToRegister(instr->InputAt(0));
-  Register temp = ToRegister(instr->TempAt(0));
+  Register temp1 = ToRegister(instr->TempAt(0));
 
   int true_block = chunk_->LookupDestination(instr->true_block_id());
   int false_block = chunk_->LookupDestination(instr->false_block_id());
 
   Label* false_label = chunk_->GetAssemblyLabel(false_block);
 
-  __ Untaint(input, temp);
-  __ JumpIfSmi(input, false_label);
+  if (TestType(instr->hydrogen()) != TAINTED_TYPE && FLAG_taint_policy) {
+    Register temp2 = ToRegister(instr->TempAt(1));
+    __ mov(temp1, input);
+    __ Untaint(temp1, temp2);
+    __ JumpIfSmi(temp1, false_label);
+    __ CmpObjectType(temp1, TestType(instr->hydrogen()), temp2);
+  } else {
+    __ JumpIfSmi(input, false_label);
+    __ CmpObjectType(input, TestType(instr->hydrogen()), temp1);
+  }
 
-  __ CmpObjectType(input, TestType(instr->hydrogen()), temp);
   EmitBranch(true_block, false_block, BranchCondition(instr->hydrogen()));
 }
 

@@ -1197,7 +1197,11 @@ void LCodeGen::DoValueOf(LValueOf* instr) {
   Register result = ToRegister(instr->result());
   ASSERT(input.is(result));
   Label done;
-  __ Untaint(input);
+
+  if (FLAG_taint_policy) {
+    __ Untaint(input);
+  }
+
   // If the object is a smi return the object.
   __ JumpIfSmi(input, &done, Label::kNear);
 
@@ -1589,7 +1593,10 @@ Condition LCodeGen::EmitIsObject(Register input,
                                  Label* is_object) {
   ASSERT(!input.is(kScratchRegister));
 
-  __ Untaint(input);
+  if (FLAG_taint_policy) {
+    __ Untaint(input);
+  }
+
   __ JumpIfSmi(input, is_not_object);
 
   __ CompareRoot(input, Heap::kNullValueRootIndex);
@@ -1722,7 +1729,7 @@ void LCodeGen::DoHasInstanceTypeAndBranch(LHasInstanceTypeAndBranch* instr) {
 
   Label* false_label = chunk_->GetAssemblyLabel(false_block);
 
-  if (TestType(instr->hydrogen()) != TAINTED_TYPE) {
+  if (TestType(instr->hydrogen()) != TAINTED_TYPE && FLAG_taint_policy) {
     Register temp = ToRegister(instr->TempAt(0));
     __ Untaint(temp, input);
     __ JumpIfSmi(temp, false_label);

@@ -740,6 +740,11 @@ class MacroAssembler: public Assembler {
                      Label* on_tainted,
                      Label::Distance near_jump = Label::kFar);
 
+  void JumpIfNotTainted(Register src,
+                        Register scratch,
+                        Label* on_not_tainted,
+                        Label::Distance near_jump = Label::kFar);
+
   void Untaint(Register src, Register scratch);
 
 

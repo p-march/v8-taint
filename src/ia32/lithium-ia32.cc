@@ -1564,6 +1564,7 @@ LInstruction* LChunkBuilder::DoHasInstanceTypeAndBranch(
   ASSERT(instr->value()->representation().IsTagged());
   return new(zone()) LHasInstanceTypeAndBranch(
       UseRegister(instr->value()),
+      TempRegister(),
       TempRegister());
 }
 
