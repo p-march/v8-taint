@@ -1630,6 +1630,11 @@ void LCodeGen::DoIsNilAndBranch(LIsNilAndBranch* instr) {
     return;
   }
 
+  if (FLAG_taint_policy) {
+    Register scratch = ToRegister(instr->TempAt(0));
+    __ Untaint(reg, scratch);
+  }
+
   int true_block = chunk_->LookupDestination(instr->true_block_id());
   Handle<Object> nil_value = instr->nil() == kNullValue ?
       factory()->null_value() :

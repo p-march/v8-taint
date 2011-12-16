@@ -1684,10 +1684,12 @@ function encrypt() {
   var RSA = new RSAKey();
   RSA.setPublic(nValue, eValue);
   RSA.setPrivateEx(nValue, eValue, dValue, pValue, qValue, dmp1Value, dmq1Value, coeffValue);
-  encrypted = RSA.encrypt(TEXT);
+  encrypted = RSA.encrypt(Crypto.Taint(TEXT));
 }
 
 function decrypt() {
+  encrypted = %Untaint(encrypted);
+  encrypted = Crypto.Taint(encrypted);
   var RSA = new RSAKey();
   RSA.setPublic(nValue, eValue);
   RSA.setPrivateEx(nValue, eValue, dValue, pValue, qValue, dmp1Value, dmq1Value, coeffValue);

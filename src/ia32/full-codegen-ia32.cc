@@ -4380,6 +4380,11 @@ void FullCodeGenerator::EmitLiteralCompareNil(CompareOperation* expr,
   Handle<Object> nil_value = nil == kNullValue ?
       isolate()->factory()->null_value() :
       isolate()->factory()->undefined_value();
+
+  if (FLAG_taint_policy) {
+    __ Untaint(eax, edx);
+  }
+
   __ cmp(eax, nil_value);
   if (expr->op() == Token::EQ_STRICT) {
     Split(equal, if_true, if_false, fall_through);

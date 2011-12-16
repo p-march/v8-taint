@@ -1879,7 +1879,7 @@ RUNTIME_FUNCTION(MaybeObject*, KeyedLoadIC_Miss) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, KeyedLoadIC_MissForceGeneric) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   HandleScope scope(isolate);
   ASSERT(args.length() == 2);
   KeyedLoadIC ic(isolate);

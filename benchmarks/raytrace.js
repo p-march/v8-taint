@@ -657,6 +657,7 @@ Flog.RayTracer.Engine.prototype = {
           		var xp = x * 1.0 / canvasWidth * 2 - 1;
 
           		var ray = scene.camera.getRay(xp, yp);
+                RayTrace.Taint(ray);
 
           		var color = this.getPixelColor(ray, scene);
 

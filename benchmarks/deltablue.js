@@ -542,6 +542,7 @@ function Variable(name, initialValue) {
   this.walkStrength = Strength.WEAKEST;
   this.stay = true;
   this.name = name;
+  DeltaBlue.Taint(this);
 }
 
 /**

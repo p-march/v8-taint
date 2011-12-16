@@ -75,7 +75,7 @@ function InsertNewNode() {
     key = GenerateKey();
   } while (splayTree.find(key) != null);
   var payload = GeneratePayloadTree(kSplayTreePayloadDepth, String(key));
-  splayTree.insert(key, payload);
+  splayTree.insert(Splay.Taint(key), Splay.Taint(payload));
   return key;
 }
 

@@ -1560,6 +1560,10 @@ void LCodeGen::DoIsNilAndBranch(LIsNilAndBranch* instr) {
     return;
   }
 
+  if (FLAG_taint_policy) {
+    __ Untaint(reg);
+  }
+
   int true_block = chunk_->LookupDestination(instr->true_block_id());
   Heap::RootListIndex nil_value = instr->nil() == kNullValue ?
       Heap::kNullValueRootIndex :

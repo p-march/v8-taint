@@ -518,6 +518,7 @@ function Packet(link, id, kind) {
   this.kind = kind;
   this.a1 = 0;
   this.a2 = new Array(DATA_SIZE);
+  Richards.Taint(this);
 }
 
 /**

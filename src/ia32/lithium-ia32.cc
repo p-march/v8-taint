@@ -1511,8 +1511,13 @@ LInstruction* LChunkBuilder::DoCompareConstantEqAndBranch(
 
 LInstruction* LChunkBuilder::DoIsNilAndBranch(HIsNilAndBranch* instr) {
   // We only need a temp register for non-strict compare.
-  LOperand* temp = instr->kind() == kStrictEquality ? NULL : TempRegister();
-  return new(zone()) LIsNilAndBranch(UseRegisterAtStart(instr->value()), temp);
+  LOperand* temp;
+  if (FLAG_taint_policy) {
+    temp = TempRegister();
+  } else {
+    temp = instr->kind() == kStrictEquality ? NULL : TempRegister();
+  }
+  return new(zone()) LIsNilAndBranch(UseRegister(instr->value()), temp);
 }
 
 

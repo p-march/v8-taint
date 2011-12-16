@@ -67,6 +67,8 @@ function BenchmarkSuite(name, reference, benchmarks) {
   this.name = name;
   this.reference = reference;
   this.benchmarks = benchmarks;
+  this.tainted_objects = 0;
+  this.total_objects = 0;
   BenchmarkSuite.suites.push(this);
 }
 
@@ -281,4 +283,28 @@ BenchmarkSuite.prototype.RunStep = function(runner) {
 
   // Start out running the setup.
   return RunNextSetup();
+}
+
+
+BenchmarkSuite.prototype.taint_level = 0.0;
+
+
+BenchmarkSuite.SetTaintLevel = function(taint_level) {
+  BenchmarkSuite.prototype.taint_level = taint_level;
+}
+
+
+BenchmarkSuite.prototype.Taint= function(object) {
+  if (!this.taint_level) return object;
+
+  this.total_objects++;
+
+  if ((this.total_objects &&
+      (this.tainted_objects + 1) / this.total_objects <= this.taint_level) ||
+      (this.taint_level == 1.0)) {
+    this.tainted_objects++;
+    return %Taint(object);
+  }
+
+  return object;
 }

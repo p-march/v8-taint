@@ -816,7 +816,7 @@ Object* Object::GetPrototype() {
 
 
 // CLEAN(petr);
-static const char* TypeToString(InstanceType type) {
+const char* TypeToString(InstanceType type) {
   switch (type) {
     case INVALID_TYPE: return "INVALID";
     case MAP_TYPE: return "MAP";
@@ -880,8 +880,8 @@ MaybeObject* Object::TaintReference() {
   ASSERT(!this->IsTainted());
   ASSERT(!this->IsSpecObject());
   // CLEAN(petr):
-  printf("Tainting reference %s\n", this->IsHeapObject() ?
-         TypeToString(HeapObject::cast(this)->map()->instance_type()) : "smi");
+//  printf("Tainting reference %s\n", this->IsHeapObject() ?
+//         TypeToString(HeapObject::cast(this)->map()->instance_type()) : "smi");
   Object* result;
   { MaybeObject* maybe_clone = HEAP->AllocateTainted();
     if (!maybe_clone->ToObject(&result)) return maybe_clone;
@@ -938,13 +938,18 @@ MaybeObject* Object::TaintObject() {
 
   // Fill the remainder of the Tainted with dead wood.
   if (size > Tainted::kSize) {
-    heap->CreateFillerObjectAt(self->address() + Tainted::kSize,
-                               size - Tainted::kSize);
+    // TODO(petr): this is not necessary as soon as we visit only object pointer
+    // in tainted object, but not the whole body of the tainted object
+    // Should be enabled only for debug mode
+    ASSERT((size - Tainted::kSize) % kPointerSize == 0);
+    MemsetPointer(reinterpret_cast<Object**>(self->address() + Tainted::kSize),
+                  heap->undefined_value(),
+                  (size - Tainted::kSize) / kPointerSize);
   }
 
-  printf("Tainting object %s %p clone %p space %d\n", this->IsHeapObject() ?
-         TypeToString(HeapObject::cast(this)->map()->instance_type()) : "smi",
-         (void*) this, (void*)clone, space);
+//  printf("Tainting object %s %p clone %p space %d\n", this->IsHeapObject() ?
+//         TypeToString(HeapObject::cast(this)->map()->instance_type()) : "smi",
+//         (void*) this, (void*)clone, space);
 
   return self;
 }
@@ -1011,7 +1016,7 @@ MaybeObject* Object::Untaint() {
   ASSERT(this->IsTainted());
   Object* object = Tainted::cast(this)->tainted_object();
   // CLEAN(petr)
-  printf("Untainting %p\n", (void*)this);
+//  printf("Untainting %p\n", (void*)this);
 
   // NOTE(petr): Tainted object continue live on the heap,
   // and supposed to be freed by garbage collector

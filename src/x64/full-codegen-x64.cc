@@ -4333,6 +4333,11 @@ void FullCodeGenerator::EmitLiteralCompareNil(CompareOperation* expr,
   Heap::RootListIndex nil_value = nil == kNullValue ?
       Heap::kNullValueRootIndex :
       Heap::kUndefinedValueRootIndex;
+
+  if (FLAG_taint_policy) {
+    __ Untaint(rax);
+  }
+
   __ CompareRoot(rax, nil_value);
   if (expr->op() == Token::EQ_STRICT) {
     Split(equal, if_true, if_false, fall_through);

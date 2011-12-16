@@ -65,7 +65,7 @@ namespace internal {
 
 // CLEAN(petr):
 #define RUNTIME_ASSERT(value) \
-  if (!(value)) {return isolate->ThrowIllegalOperation();}
+  if (!(value)) {ASSERT(0); return isolate->ThrowIllegalOperation();}
 
 // Cast the given object to a value of the specified type and store
 // it in a variable with the given name.  If the object is not of the
@@ -1734,7 +1734,9 @@ RUNTIME_FUNCTION(MaybeObject*,
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_RegExpExec) {
-  ASSERT_IF_TAINTED_ARGS();
+  // NOTE(petr): maybe a call to policy engine is required to decide weather to
+  // allow execution of tainted regular expression 
+  UNTAINT_ALL_ARGS();
   HandleScope scope(isolate);
   ASSERT(args.length() == 4);
   CONVERT_ARG_CHECKED(JSRegExp, regexp, 0);
@@ -1752,12 +1754,15 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_RegExpExec) {
                                            index,
                                            last_match_info);
   if (result.is_null()) return Failure::Exception();
+  // TODO(petr): investinate weather the below is true
+  // NOTE(petr): do not TAINT_RETURN the result as it is args[3]
+  // and if the args[3] was tainted, it is tainted twice
   return *result;
 }
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_RegExpConstructResult) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   ASSERT(args.length() == 3);
   CONVERT_SMI_ARG_CHECKED(elements_count, 0);
   if (elements_count < 0 ||
@@ -1788,7 +1793,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_RegExpConstructResult) {
   // Write in-object properties after the length of the array.
   array->InObjectPropertyAtPut(JSRegExpResult::kIndexIndex, args[1]);
   array->InObjectPropertyAtPut(JSRegExpResult::kInputIndex, args[2]);
-  return array;
+  TAINT_RETURN(array);
 }
 
 
@@ -2311,10 +2316,10 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_StringCharCodeAt) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_CharFromCode) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   ASSERT(args.length() == 1);
-  return CharFromCode(isolate, args[0]);
+  TAINT_RETURN(CharFromCode(isolate, args[0]));
 }
 
 
@@ -3254,7 +3259,7 @@ MUST_USE_RESULT static MaybeObject* StringReplaceRegExpWithEmptyString(
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_StringReplaceRegExpWithString) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   ASSERT(args.length() == 4);
 
   CONVERT_CHECKED(String, subject, args[0]);
@@ -3286,19 +3291,19 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_StringReplaceRegExpWithString) {
 
   if (replacement->length() == 0) {
     if (subject->HasOnlyAsciiChars()) {
-      return StringReplaceRegExpWithEmptyString<SeqAsciiString>(
-          isolate, subject, regexp, last_match_info);
+      TAINT_RETURN(StringReplaceRegExpWithEmptyString<SeqAsciiString>(
+          isolate, subject, regexp, last_match_info));
     } else {
-      return StringReplaceRegExpWithEmptyString<SeqTwoByteString>(
-          isolate, subject, regexp, last_match_info);
+      TAINT_RETURN(StringReplaceRegExpWithEmptyString<SeqTwoByteString>(
+          isolate, subject, regexp, last_match_info));
     }
   }
 
-  return StringReplaceRegExpWithString(isolate,
-                                       subject,
-                                       regexp,
-                                       replacement,
-                                       last_match_info);
+  TAINT_RETURN(StringReplaceRegExpWithString(isolate,
+                                             subject,
+                                             regexp,
+                                             replacement,
+                                             last_match_info));
 }
 
 
@@ -3545,7 +3550,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_SubString) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_StringMatch) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   ASSERT_EQ(3, args.length());
 
   CONVERT_ARG_CHECKED(String, subject, 0);
@@ -3596,7 +3601,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_StringMatch) {
   }
   Handle<JSArray> result = isolate->factory()->NewJSArrayWithElements(elements);
   result->set_length(Smi::FromInt(matches));
-  return *result;
+  TAINT_RETURN(*result);
 }
 
 
@@ -14093,10 +14098,11 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_Print) {
   HandleScope scope(isolate);
   ASSERT(args.length() == 1);
   Object* object = args[0];
-
+#ifdef DEBUG
   printf("Runtme_Print: ");
   object->ShortPrint();
   printf("\n");
+#endif
   return object;
 }
 
@@ -14105,10 +14111,11 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_DeepPrint) {
   HandleScope scope(isolate);
   ASSERT(args.length() == 1);
   Object* object = args[0];
-
+#ifdef DEBUG
   printf("Runtme_DeepPrint: ");
   object->Print();
   printf("\n");
+#endif
   return object;
 }
 

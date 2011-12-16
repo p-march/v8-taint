@@ -31,7 +31,7 @@ load('richards.js');
 load('deltablue.js');
 load('crypto.js');
 load('raytrace.js');
-load('earley-boyer.js');
+//load('earley-boyer.js');
 load('regexp.js');
 load('splay.js');
 
@@ -55,6 +55,20 @@ function PrintScore(score) {
   }
 }
 
+
+function Init(args) {
+  var taint_level = 0.0;
+  for (var i = 0; i < args.length; i++) {
+    var arg = args[i];
+    if (arg.substring(0,12) == 'taint_level=') {
+      taint_level = parseInt(arg.substring(12)) / 100;
+    }
+  }
+
+  BenchmarkSuite.SetTaintLevel(taint_level);
+}
+
+Init(arguments);
 
 BenchmarkSuite.RunSuites({ NotifyResult: PrintResult,
                            NotifyError: PrintError,
