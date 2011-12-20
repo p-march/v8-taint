@@ -180,6 +180,15 @@
                   ],
                 }],
               ],
+              'conditions': [
+                ['enable_js_taint_policy==1', {
+                  'variables': {
+                    'mksnapshot_flags': [
+                      '--taint_policy',
+                    ],
+                  },
+                }],
+              ],
               'action': [
                 '<@(_inputs)',
                 '<@(mksnapshot_flags)',

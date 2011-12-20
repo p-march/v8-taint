@@ -1782,7 +1782,9 @@ void LCodeGen::EmitClassOfTest(Label* is_true,
                                Register input,
                                Register temp,
                                Register scratch) {
-  __ Untaint(input);
+  if (FLAG_taint_policy) {
+    __ Untaint(input);
+  }
   __ JumpIfSmi(input, is_false);
 
   if (class_name->IsEqualTo(CStrVector("Function"))) {
@@ -4143,7 +4145,11 @@ Condition LCodeGen::EmitTypeofIs(Label* true_label,
                                  Register input,
                                  Handle<String> type_name) {
   Condition final_branch_condition = no_condition;
-  __ Untaint(input);
+
+  if (FLAG_taint_policy) {
+    __ Untaint(input);
+  }
+
   if (type_name->Equals(heap()->number_symbol())) {
     __ JumpIfSmi(input, true_label);
     __ CompareRoot(FieldOperand(input, HeapObject::kMapOffset),

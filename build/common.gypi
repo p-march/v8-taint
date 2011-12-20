@@ -84,6 +84,9 @@
 
     # For a shared library build, results in "libv8-<(soname_version).so".
     'soname_version%': '',
+
+    # Taint policy support
+    'enable_js_taint_policy%': 0,
   },
   'target_defaults': {
     'conditions': [
