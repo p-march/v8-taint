@@ -65,7 +65,7 @@ namespace internal {
 
 // CLEAN(petr):
 #define RUNTIME_ASSERT(value) \
-  if (!(value)) {ASSERT(0); return isolate->ThrowIllegalOperation();}
+  if (!(value)) {return isolate->ThrowIllegalOperation();}
 
 // Cast the given object to a value of the specified type and store
 // it in a variable with the given name.  If the object is not of the
