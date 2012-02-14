@@ -46,6 +46,7 @@
 #include "string-stream.h"
 #include "utils.h"
 #include "vm-state-inl.h"
+#include "taint-policy.h"
 
 #ifdef ENABLE_DISASSEMBLER
 #include "disasm.h"
@@ -272,25 +273,25 @@ MaybeObject* JSObject::GetPropertyWithCallbackTaintCheck(Object* receiver,
     return GetPropertyWithCallback(receiver, structure, name);
 
   MaybeObject* result;
-  bool taint = false;
   HandleScope scope(isolate);
+  Object* before;
+  Object* after;
   Handle<JSObject> self(this);
   Handle<Object> receiver_handler(receiver);
   Handle<Object> structure_handler(structure);
   Handle<String> name_handler(name);
 
-  Vector< Handle<Object> > args = Vector< Handle<Object> >::New(3);
-  args[0] = Handle<Object>::cast(isolate->factory()->LookupAsciiSymbol("get"));
-  args[1] = self;
-  args[2] = Handle<Object>::cast(name_handler);
+  Vector< Handle<Object> > policy_args = Vector< Handle<Object> >::New(4);
+  policy_args[0] = Handle<Object>(isolate->heap()->undefined_value());
+  policy_args[1] = Handle<Object>(Smi::FromInt(TaintPolicy::kGet));
+  policy_args[2] = Handle<Object>::cast(self);
+  policy_args[3] = Handle<Object>::cast(name_handler);
 
-  result = Execution::TaintPolicyCheck(isolate, args, &taint);
-  if (result) goto leave;
-  
-  // TODO(petr): get rid of this assert if needed
-  ASSERT(!TaintPolicyHelper::HasTaintedArguments(args));
+  result = TaintPolicy::BeforeTaintPolicyCheck(isolate, policy_args);
+  if (!result->ToObject(&before)) goto leave;
 
-  TaintPolicyHelper::UntaintArguments(args);
+  result = TaintPolicy::BeforeTaintPolicyAction(isolate, policy_args, before);
+  if (result->IsFailure()) goto leave;
 
   {
     UntaintedContextScope ctx_scope(isolate->context());
@@ -298,14 +299,16 @@ MaybeObject* JSObject::GetPropertyWithCallbackTaintCheck(Object* receiver,
                                            *structure_handler,
                                            *name_handler);
   }
+  if (result->IsFailure()) goto leave;
 
-  Object* obj;
-  if (taint && result->ToObject(&obj)) {
-    result = obj->Taint();
-  }
+  policy_args[0] = Handle<Object>(result->ToObjectUnchecked());
+  result = TaintPolicy::AfterTaintPolicyCheck(isolate, policy_args);
+  if (!result->ToObject(&after)) goto leave;
+
+  result = TaintPolicy::TaintPolicyAction(isolate, policy_args, before, after);
 
  leave:
-  args.Dispose();
+  policy_args.Dispose();
   return result;
 }
 
@@ -2240,26 +2243,24 @@ MaybeObject* JSObject::SetPropertyWithInterceptorTaintCheck(
 
   MaybeObject* result;
   HandleScope scope(isolate);
+  Object* before;
+  Object* after;
   Handle<JSObject> self(this);
   Handle<String> name_handler(name);
   Handle<Object> value_handler(value);
-  
-  Vector< Handle<Object> > args = Vector< Handle<Object> >::New(4);
-  args[0] = Handle<Object>::cast(
-      isolate->factory()->LookupAsciiSymbol("set"));
-  args[1] = Handle<Object>::cast(self);
-  args[2] = Handle<Object>::cast(name_handler);
-  args[3] = value_handler;
 
-  result = Execution::TaintPolicyCheck(isolate, args);
-  if (result) goto leave;
+  Vector< Handle<Object> > policy_args = Vector< Handle<Object> >::New(5);
+  policy_args[0] = Handle<Object>(isolate->heap()->undefined_value());
+  policy_args[1] = Handle<Object>(Smi::FromInt(TaintPolicy::kSet));
+  policy_args[2] = Handle<Object>::cast(self);
+  policy_args[3] = Handle<Object>::cast(name_handler);
+  policy_args[4] = value_handler;
 
-  // TODO(petr): get rid of this assert if needed
-  ASSERT(!TaintPolicyHelper::HasTaintedArguments(args));
+  result = TaintPolicy::BeforeTaintPolicyCheck(isolate, policy_args);
+  if (!result->ToObject(&before)) goto leave;
 
-  // args contain handle-locations of objects, replace the values
-  // within the handle-locations if the object is tatined
-  TaintPolicyHelper::UntaintArguments(args);
+  result = TaintPolicy::BeforeTaintPolicyAction(isolate, policy_args, before);
+  if (result->IsFailure()) goto leave;
 
   {
     UntaintedContextScope ctx_scope(isolate->context());
@@ -2268,9 +2269,16 @@ MaybeObject* JSObject::SetPropertyWithInterceptorTaintCheck(
                                               attributes,
                                               strict_mode);
   }
+  if (result->IsFailure()) goto leave;
+
+  policy_args[0] = Handle<Object>(result->ToObjectUnchecked());
+  result = TaintPolicy::AfterTaintPolicyCheck(isolate, policy_args);
+  if (!result->ToObject(&after)) goto leave;
+
+  result = TaintPolicy::TaintPolicyAction(isolate, policy_args, before, after);
 
  leave:
-  args.Dispose();
+  policy_args.Dispose();
   return result;
 }
 
@@ -2379,28 +2387,26 @@ MaybeObject* JSObject::SetPropertyWithCallbackTaintCheck(
 
   MaybeObject* result;
   HandleScope scope(isolate);
+  Object* before;
+  Object* after;
   Handle<JSObject> self(this);
   Handle<Object> structure_handler(structure);
   Handle<String> name_handler(name);
   Handle<Object> value_handler(value);
   Handle<JSObject> holder_handler(holder);
-  
-  Vector< Handle<Object> > args = Vector< Handle<Object> >::New(4);
-  args[0] = Handle<Object>::cast(
-      isolate->factory()->LookupAsciiSymbol("set"));
-  args[1] = Handle<Object>::cast(holder_handler);
-  args[2] = Handle<Object>::cast(name_handler);
-  args[3] = value_handler;
 
-  result = Execution::TaintPolicyCheck(isolate, args);
-  if (result) goto leave;
+  Vector< Handle<Object> > policy_args = Vector< Handle<Object> >::New(5);
+  policy_args[0] = Handle<Object>(isolate->heap()->undefined_value());
+  policy_args[1] = Handle<Object>(Smi::FromInt(TaintPolicy::kSet));
+  policy_args[2] = Handle<Object>::cast(holder_handler);
+  policy_args[3] = Handle<Object>::cast(name_handler);
+  policy_args[4] = value_handler;
 
-  // TODO(petr): get rid of this assert if needed
-  ASSERT(!TaintPolicyHelper::HasTaintedArguments(args));
+  result = TaintPolicy::BeforeTaintPolicyCheck(isolate, policy_args);
+  if (!result->ToObject(&before)) goto leave;
 
-  // args contain handle-locations of objects, replace the values
-  // within the handle-locations if the object is tatined
-  TaintPolicyHelper::UntaintArguments(args);
+  result = TaintPolicy::BeforeTaintPolicyAction(isolate, policy_args, before);
+  if (result->IsFailure()) goto leave;
 
   {
     UntaintedContextScope ctx_scope(isolate->context());
@@ -2410,9 +2416,16 @@ MaybeObject* JSObject::SetPropertyWithCallbackTaintCheck(
                                            *holder_handler,
                                            strict_mode);
   }
+  if (result->IsFailure()) goto leave;
+
+  policy_args[0] = Handle<Object>(result->ToObjectUnchecked());
+  result = TaintPolicy::AfterTaintPolicyCheck(isolate, policy_args);
+  if (!result->ToObject(&after)) goto leave;
+
+  result = TaintPolicy::TaintPolicyAction(isolate, policy_args, before, after);
 
  leave:
-  args.Dispose();
+  policy_args.Dispose();
   return result;
 }
 
@@ -4191,32 +4204,37 @@ MaybeObject* JSObject::DeletePropertyWithInterceptorTaintCheck(String* name) {
 
   MaybeObject* result;
   HandleScope scope(isolate);
+  Object* before;
+  Object* after;
   Handle<JSObject> self(this);
   Handle<String> name_handler(name);
 
-  Vector< Handle<Object> > args = Vector< Handle<Object> >::New(3);
-  args[0] = Handle<Object>::cast(
-      isolate->factory()->LookupAsciiSymbol("del"));
-  args[1] = Handle<Object>::cast(self);
-  args[2] = Handle<Object>::cast(name_handler);
+  Vector< Handle<Object> > policy_args = Vector< Handle<Object> >::New(4);
+  policy_args[0] = Handle<Object>(isolate->heap()->undefined_value());
+  policy_args[1] = Handle<Object>(Smi::FromInt(TaintPolicy::kDel));
+  policy_args[2] = Handle<Object>::cast(self);
+  policy_args[3] = Handle<Object>::cast(name_handler);
 
-  result = Execution::TaintPolicyCheck(isolate, args);
-  if (result) goto leave;
+  result = TaintPolicy::BeforeTaintPolicyCheck(isolate, policy_args);
+  if (!result->ToObject(&before)) goto leave;
 
-  // TODO(petr): get rid of this assert if needed
-  ASSERT(!TaintPolicyHelper::HasTaintedArguments(args));
-
-  // args contain handle-locations of objects, replace the values
-  // within the handle-locations if the object is tatined
-  TaintPolicyHelper::UntaintArguments(args);
+  result = TaintPolicy::BeforeTaintPolicyAction(isolate, policy_args, before);
+  if (result->IsFailure()) goto leave;
 
   {
     UntaintedContextScope ctx_scope(isolate->context());
     result = self->DeletePropertyWithInterceptor(*name_handler);
   }
+  if (result->IsFailure()) goto leave;
+
+  policy_args[0] = Handle<Object>(result->ToObjectUnchecked());
+  result = TaintPolicy::AfterTaintPolicyCheck(isolate, policy_args);
+  if (!result->ToObject(&after)) goto leave;
+
+  result = TaintPolicy::TaintPolicyAction(isolate, policy_args, before, after);
 
  leave:
-  args.Dispose();
+  policy_args.Dispose();
   return result;
 }
 
@@ -4263,32 +4281,37 @@ MaybeObject* JSObject::DeleteElementWithInterceptorTaintCheck(uint32_t index) {
     return DeleteElementWithInterceptor(index);
 
   MaybeObject* result;
+  Object* before;
+  Object* after;
   HandleScope scope(isolate);
   Handle<JSObject> self(this);
 
-  Vector< Handle<Object> > args = Vector< Handle<Object> >::New(3);
-  args[0] = Handle<Object>::cast(
-      isolate->factory()->LookupAsciiSymbol("del"));
-  args[1] = Handle<Object>::cast(self);
-  args[2] = Handle<Object>(Smi::FromInt(index));
+  Vector< Handle<Object> > policy_args = Vector< Handle<Object> >::New(4);
+  policy_args[0] = Handle<Object>(isolate->heap()->undefined_value());
+  policy_args[1] = Handle<Object>(Smi::FromInt(TaintPolicy::kDel));
+  policy_args[2] = Handle<Object>::cast(self);
+  policy_args[3] = Handle<Object>(Smi::FromInt(index));
 
-  result = Execution::TaintPolicyCheck(isolate, args);
-  if (result) goto leave;
+  result = TaintPolicy::BeforeTaintPolicyCheck(isolate, policy_args);
+  if (!result->ToObject(&before)) goto leave;
 
-  // TODO(petr): get rid of this assert if needed
-  ASSERT(!TaintPolicyHelper::HasTaintedArguments(args));
-
-  // args contain handle-locations of objects, replace the values
-  // within the handle-locations if the object is tatined
-  TaintPolicyHelper::UntaintArguments(args);
+  result = TaintPolicy::BeforeTaintPolicyAction(isolate, policy_args, before);
+  if (result->IsFailure()) goto leave;
 
   {
     UntaintedContextScope ctx_scope(isolate->context());
     result = self->DeleteElementWithInterceptor(index);
   }
+  if (result->IsFailure()) goto leave;
+
+  policy_args[0] = Handle<Object>(result->ToObjectUnchecked());
+  result = TaintPolicy::AfterTaintPolicyCheck(isolate, policy_args);
+  if (!result->ToObject(&after)) goto leave;
+
+  result = TaintPolicy::TaintPolicyAction(isolate, policy_args, before, after);
 
  leave:
-  args.Dispose();
+  policy_args.Dispose();
   return result;
 }
 
@@ -9380,25 +9403,23 @@ MaybeObject* JSObject::SetElementWithInterceptorTaintCheck(
 
   MaybeObject* result;
   HandleScope scope(isolate);
+  Object* before;
+  Object* after;
   Handle<JSObject> self(this);
   Handle<Object> value_handler(value);
 
-  Vector< Handle<Object> > args = Vector< Handle<Object> >::New(4);
-  args[0] = Handle<Object>::cast(
-      isolate->factory()->LookupAsciiSymbol("set"));
-  args[1] = Handle<Object>::cast(self);
-  args[2] = Handle<Object>(Smi::FromInt(index));
-  args[3] = value_handler;
+  Vector< Handle<Object> > policy_args = Vector< Handle<Object> >::New(5);
+  policy_args[0] = Handle<Object>(isolate->heap()->undefined_value());
+  policy_args[1] = Handle<Object>(Smi::FromInt(TaintPolicy::kSet));
+  policy_args[2] = Handle<Object>::cast(self);
+  policy_args[3] = Handle<Object>(Smi::FromInt(index));
+  policy_args[4] = value_handler;
 
-  result = Execution::TaintPolicyCheck(isolate, args);
-  if (result) goto leave;
+  result = TaintPolicy::BeforeTaintPolicyCheck(isolate, policy_args);
+  if (!result->ToObject(&before)) goto leave;
 
-  // TODO(petr): get rid of this assert if needed
-  ASSERT(!TaintPolicyHelper::HasTaintedArguments(args));
-
-  // args contain handle-locations of objects, replace the values
-  // within the handle-locations if the object is tatined
-  TaintPolicyHelper::UntaintArguments(args);
+  result = TaintPolicy::BeforeTaintPolicyAction(isolate, policy_args, before);
+  if (result->IsFailure()) goto leave;
 
   {
     UntaintedContextScope ctx_scope(isolate->context());
@@ -9407,9 +9428,16 @@ MaybeObject* JSObject::SetElementWithInterceptorTaintCheck(
                                              strict_mode,
                                              check_prototype);
   }
+  if (result->IsFailure()) goto leave;
+
+  policy_args[0] = Handle<Object>(result->ToObjectUnchecked());
+  result = TaintPolicy::AfterTaintPolicyCheck(isolate, policy_args);
+  if (!result->ToObject(&after)) goto leave;
+
+  result = TaintPolicy::TaintPolicyAction(isolate, policy_args, before, after);
 
  leave:
-  args.Dispose();
+  policy_args.Dispose();
   return result;
 }
 
@@ -9475,28 +9503,25 @@ MaybeObject* JSObject::GetElementWithCallbackTaintCheck(Object* receiver,
     return GetElementWithCallback(receiver, structure, index, holder);
 
   MaybeObject* result;
-  bool taint = false;
   HandleScope scope(isolate);
+  Object* before;
+  Object* after;
   Handle<JSObject> self(this);
   Handle<Object> receiver_handler(receiver);
   Handle<Object> structure_handler(structure);
   Handle<Object> holder_handler(holder);
 
-  Vector< Handle<Object> > args = Vector< Handle<Object> >::New(3);
-  args[0] = Handle<Object>::cast(
-      isolate->factory()->LookupAsciiSymbol("get"));
-  args[1] = holder_handler;
-  args[2] = Handle<Object>(Smi::FromInt(index));
-  
-  result = Execution::TaintPolicyCheck(isolate, args, &taint);
-  if (result) goto leave;
+  Vector< Handle<Object> > policy_args = Vector< Handle<Object> >::New(4);
+  policy_args[0] = Handle<Object>(isolate->heap()->undefined_value());
+  policy_args[1] = Handle<Object>(Smi::FromInt(TaintPolicy::kGet));
+  policy_args[2] = holder_handler;
+  policy_args[3] = Handle<Object>(Smi::FromInt(index));
 
-  // TODO(petr): get rid of this assert if needed
-  ASSERT(!TaintPolicyHelper::HasTaintedArguments(args));
+  result = TaintPolicy::BeforeTaintPolicyCheck(isolate, policy_args);
+  if (!result->ToObject(&before)) goto leave;
 
-  // args contain handle-locations of objects, replace the values
-  // within the handle-locations if the object is tatined
-  TaintPolicyHelper::UntaintArguments(args);
+  result = TaintPolicy::BeforeTaintPolicyAction(isolate, policy_args, before);
+  if (result->IsFailure()) goto leave;
 
   {
     UntaintedContextScope ctx_scope(isolate->context());
@@ -9505,14 +9530,16 @@ MaybeObject* JSObject::GetElementWithCallbackTaintCheck(Object* receiver,
                                           index,
                                           *holder_handler);
   }
+  if (result->IsFailure()) goto leave;
 
-  Object* obj;
-  if (taint && result->ToObject(&obj)) {
-    result = obj->Taint();
-  }
+  policy_args[0] = Handle<Object>(result->ToObjectUnchecked());
+  result = TaintPolicy::AfterTaintPolicyCheck(isolate, policy_args);
+  if (!result->ToObject(&after)) goto leave;
+
+  result = TaintPolicy::TaintPolicyAction(isolate, policy_args, before, after);
 
  leave:
-  args.Dispose();
+  policy_args.Dispose();
   return result;
 }
 
@@ -9607,27 +9634,25 @@ MaybeObject* JSObject::SetElementWithCallbackTaintCheck(
 
   MaybeObject* result;
   HandleScope scope(isolate);
+  Object* before;
+  Object* after;
   Handle<JSObject> self(this);
   Handle<Object> structure_handler(structure);
   Handle<Object> value_handler(value);
   Handle<JSObject> holder_handler(holder);
 
-  Vector< Handle<Object> > args = Vector< Handle<Object> >::New(4);
-  args[0] = Handle<Object>::cast(
-      isolate->factory()->LookupAsciiSymbol("set"));
-  args[1] = Handle<Object>::cast(holder_handler);
-  args[2] = Handle<Object>(Smi::FromInt(index));
-  args[3] = value_handler;
+  Vector< Handle<Object> > policy_args = Vector< Handle<Object> >::New(5);
+  policy_args[0] = Handle<Object>(isolate->heap()->undefined_value());
+  policy_args[1] = Handle<Object>(Smi::FromInt(TaintPolicy::kSet));
+  policy_args[2] = Handle<Object>::cast(holder_handler);
+  policy_args[3] = Handle<Object>(Smi::FromInt(index));
+  policy_args[4] = value_handler;
 
-  result = Execution::TaintPolicyCheck(isolate, args);
-  if (result) goto leave;
+  result = TaintPolicy::BeforeTaintPolicyCheck(isolate, policy_args);
+  if (!result->ToObject(&before)) goto leave;
 
-  // TODO(petr): get rid of this assert if needed
-  ASSERT(!TaintPolicyHelper::HasTaintedArguments(args));
-
-  // args contain handle-locations of objects, replace the values
-  // within the handle-locations if the object is tatined
-  TaintPolicyHelper::UntaintArguments(args);
+  result = TaintPolicy::BeforeTaintPolicyAction(isolate, policy_args, before);
+  if (result->IsFailure()) goto leave;
 
   {
     UntaintedContextScope ctx_scope(isolate->context());
@@ -9637,9 +9662,16 @@ MaybeObject* JSObject::SetElementWithCallbackTaintCheck(
                                           *holder_handler,
                                           strict_mode);
   }
+  if (result->IsFailure()) goto leave;
+
+  policy_args[0] = Handle<Object>(result->ToObjectUnchecked());
+  result = TaintPolicy::AfterTaintPolicyCheck(isolate, policy_args);
+  if (!result->ToObject(&after)) goto leave;
+
+  result = TaintPolicy::TaintPolicyAction(isolate, policy_args, before, after);
 
  leave:
-  args.Dispose();
+  policy_args.Dispose();
   return result;
 }
 
@@ -10221,39 +10253,38 @@ MaybeObject* JSObject::GetElementWithInterceptorTaintCheck(Object* receiver,
     return GetElementWithInterceptor(receiver, index);
 
   MaybeObject* result;
-  bool taint = false;
   HandleScope scope(isolate);
+  Object* before;
+  Object* after;
   Handle<JSObject> self(this);
   Handle<Object> receiver_handler(receiver);
 
-  Vector< Handle<Object> > args = Vector< Handle<Object> >::New(3);
-  args[0] = Handle<Object>::cast(
-      isolate->factory()->LookupAsciiSymbol("get"));
-  args[1] = Handle<Object>::cast(self);
-  args[2] = Handle<Object>(Smi::FromInt(index));
+  Vector< Handle<Object> > policy_args = Vector< Handle<Object> >::New(4);
+  policy_args[0] = Handle<Object>(isolate->heap()->undefined_value());
+  policy_args[1] = Handle<Object>(Smi::FromInt(TaintPolicy::kGet));
+  policy_args[2] = Handle<Object>::cast(self);
+  policy_args[3] = Handle<Object>(Smi::FromInt(index));
 
-  result = Execution::TaintPolicyCheck(isolate, args, &taint);
-  if (result) goto leave;
+  result = TaintPolicy::BeforeTaintPolicyCheck(isolate, policy_args);
+  if (!result->ToObject(&before)) goto leave;
 
-  // TODO(petr): get rid of this assert if needed
-  ASSERT(!TaintPolicyHelper::HasTaintedArguments(args));
-
-  // args contain handle-locations of objects, replace the values
-  // within the handle-locations if the object is tatined
-  TaintPolicyHelper::UntaintArguments(args);
+  result = TaintPolicy::BeforeTaintPolicyAction(isolate, policy_args, before);
+  if (result->IsFailure()) goto leave;
 
   {
     UntaintedContextScope ctx_scope(isolate->context());
     result = self->GetElementWithInterceptor(*receiver_handler, index);
   }
+  if (result->IsFailure()) goto leave;
 
-  Object* obj;
-  if (taint && result->ToObject(&obj)) {
-    result = obj->Taint();
-  }
+  policy_args[0] = Handle<Object>(result->ToObjectUnchecked());
+  result = TaintPolicy::AfterTaintPolicyCheck(isolate, policy_args);
+  if (!result->ToObject(&after)) goto leave;
+
+  result = TaintPolicy::TaintPolicyAction(isolate, policy_args, before, after);
 
  leave:
-  args.Dispose();
+  policy_args.Dispose();
   return result;
 }
 
@@ -10539,27 +10570,24 @@ MaybeObject* JSObject::GetPropertyWithInterceptorTaintCheck(
     return GetPropertyWithInterceptor(receiver, name, attributes);
  
   MaybeObject* result;
-  bool taint = false;
   HandleScope scope(isolate);
+  Object* before;
+  Object* after;
   Handle<JSObject> self(this);
   Handle<JSReceiver> receiver_handler(receiver);
   Handle<String> name_handler(name);
 
-  Vector< Handle<Object> > args = Vector< Handle<Object> >::New(3);
-  args[0] = Handle<Object>::cast(
-      isolate->factory()->LookupAsciiSymbol("get"));
-  args[1] = Handle<Object>::cast(self);
-  args[2] = Handle<Object>::cast(name_handler);
+  Vector< Handle<Object> > policy_args = Vector< Handle<Object> >::New(4);
+  policy_args[0] = Handle<Object>(isolate->heap()->undefined_value());
+  policy_args[1] = Handle<Object>(Smi::FromInt(TaintPolicy::kGet));
+  policy_args[2] = Handle<Object>::cast(self);
+  policy_args[3] = Handle<Object>::cast(name_handler);
 
-  result = Execution::TaintPolicyCheck(isolate, args, &taint);
-  if (result) goto leave;
+  result = TaintPolicy::BeforeTaintPolicyCheck(isolate, policy_args);
+  if (!result->ToObject(&before)) goto leave;
 
-  // TODO(petr): get rid of this assert if needed
-  ASSERT(!TaintPolicyHelper::HasTaintedArguments(args));
-
-  // args contain handle-locations of objects, replace the values
-  // within the handle-locations if the object is tatined
-  TaintPolicyHelper::UntaintArguments(args);
+  result = TaintPolicy::BeforeTaintPolicyAction(isolate, policy_args, before);
+  if (result->IsFailure()) goto leave;
 
   {
     UntaintedContextScope ctx_scope(isolate->context());
@@ -10567,14 +10595,16 @@ MaybeObject* JSObject::GetPropertyWithInterceptorTaintCheck(
                                               *name_handler,
                                               attributes);
   }
+  if (result->IsFailure()) goto leave;
 
-  Object* obj;
-  if (taint && result->ToObject(&obj)) {
-    result = obj->Taint();
-  }
+  policy_args[0] = Handle<Object>(result->ToObjectUnchecked());
+  result = TaintPolicy::AfterTaintPolicyCheck(isolate, policy_args);
+  if (!result->ToObject(&after)) goto leave;
+
+  result = TaintPolicy::TaintPolicyAction(isolate, policy_args, before, after);
 
  leave:
-  args.Dispose();
+  policy_args.Dispose();
   return result;
 }
 

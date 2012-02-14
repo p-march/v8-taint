@@ -35,6 +35,7 @@
 #include "ic-inl.h"
 #include "mark-compact.h"
 #include "vm-state-inl.h"
+#include "taint-policy.h"
 
 namespace v8 {
 namespace internal {
@@ -1195,36 +1196,44 @@ MUST_USE_RESULT static MaybeObject* HandleApiCallHelperTaintCheck(
   if (!isolate->context()->HasTaintPolicyContext())
     return HandleApiCallHelper<is_construct>(args, isolate);
   
-  MaybeObject* result;
   HandleScope scope(isolate);
+  MaybeObject* result;
+  Object* before;
+  Object* after;
+
   Vector< Handle<Object> > back_holder =
     Vector< Handle<Object> >::New(dynamic_cast<Arguments*>(&args)->length());
-  TaintPolicyHelper::BackArgumentsWithHandles(args, back_holder);
+  TaintPolicy::BackArgumentsWithHandles(args, back_holder);
 
   Vector< Handle<Object> > policy_args =
-    Vector< Handle<Object> >::New(back_holder.length()+1);
-  policy_args[0] = Handle<Object>::cast(
-      isolate->factory()->LookupAsciiSymbol(
-          is_construct ? "construct" : "call"));
-  policy_args[1] = back_holder[0];
-  policy_args[2] = back_holder[back_holder.length() - 1];
+    Vector< Handle<Object> >::New(back_holder.length() + 2);
+  policy_args[0] = Handle<Object>(isolate->heap()->undefined_value());
+  policy_args[1] = Handle<Object>(Smi::FromInt(
+      is_construct ? TaintPolicy::kConstruct : TaintPolicy::kCall));
+  policy_args[2] = back_holder[0];
+  policy_args[3] = back_holder[back_holder.length() - 1];
   for (int i = 1; i < back_holder.length() - 1; i++) {
-    policy_args[i+2] = back_holder[i];
+    policy_args[i+3] = back_holder[i];
   }
 
-  result = Execution::TaintPolicyCheck(isolate, policy_args);
-  if (result) goto leave;
+  result = TaintPolicy::BeforeTaintPolicyCheck(isolate, policy_args);
+  if (!result->ToObject(&before)) goto leave;
 
-  // args contain handle-locations of objects, replace the values
-  // within the handle-locations if the object is tatined
-  TaintPolicyHelper::UntaintArguments(back_holder);
+  result = TaintPolicy::BeforeTaintPolicyAction(isolate, policy_args, before);
+  if (result->IsFailure()) goto leave;
 
-  TaintPolicyHelper::ResetArgumentsFromHandles(args, back_holder);
-
+  TaintPolicy::UntaintArguments(args);
   {
     UntaintedContextScope ctx_scope(isolate->context());
     result = HandleApiCallHelper<is_construct>(args, isolate);
   }
+  if (result->IsFailure()) goto leave;
+
+  policy_args[0] = Handle<Object>(result->ToObjectUnchecked());
+  result = TaintPolicy::AfterTaintPolicyCheck(isolate, policy_args);
+  if (!result->ToObject(&after)) goto leave;
+
+  result = TaintPolicy::TaintPolicyAction(isolate, policy_args, before, after);
 
  leave:
   back_holder.Dispose();
@@ -1311,40 +1320,45 @@ MaybeObject* FastHandleApiCallTaintCheck(FastHandleApiCallArgumentsType args,
   if (!isolate->context()->HasTaintPolicyContext())
     return FastHandleApiCallInternal(args, isolate);
   
-  MaybeObject* result;
   HandleScope scope(isolate);
+  MaybeObject* result;
+  Object* before;
+  Object* after;
+
   Vector< Handle<Object> > back_holder =
     Vector< Handle<Object> >::New(args.length());
-  TaintPolicyHelper::BackArgumentsWithHandles(args, back_holder);
+  TaintPolicy::BackArgumentsWithHandles(args, back_holder);
 
+  Vector< Handle<Object> > policy_args =
+    Vector< Handle<Object> >::New(back_holder.length() + 4);
   // TODO(petr): check if we place arguments correctly for taint policy check
   ASSERT(0);
-  Vector< Handle<Object> > policy_args =
-    Vector< Handle<Object> >::New(back_holder.length()+3);
-  policy_args[0] = Handle<Object>::cast(
-      isolate->factory()->LookupAsciiSymbol("call"));
-  policy_args[1] = back_holder[back_holder.length() - 1];
-  policy_args[2] = back_holder[back_holder.length() - 3];
+  policy_args[0] = Handle<Object>(isolate->heap()->undefined_value());
+  policy_args[1] = Handle<Object>(Smi::FromInt(TaintPolicy::kCall));
+  policy_args[2] = back_holder[back_holder.length() - 1];
+  policy_args[3] = back_holder[back_holder.length() - 3];
   for (int i = 0; i < back_holder.length(); i++) {
-    policy_args[i+3] = back_holder[i];
+    policy_args[i + 4] = back_holder[i];
   }
 
-  result = Execution::TaintPolicyCheck(isolate, policy_args);
-  if (result) goto leave;
+  result = TaintPolicy::BeforeTaintPolicyCheck(isolate, policy_args);
+  if (!result->ToObject(&before)) goto leave;
 
-  // TODO(petr): get rid of this assert if needed
-  ASSERT(!TaintPolicyHelper::HasTaintedArguments(policy_args));
+  result = TaintPolicy::BeforeTaintPolicyAction(isolate, policy_args, before);
+  if (result->IsFailure()) goto leave;
 
-  // args contain handle-locations of objects, replace the values
-  // within the handle-locations if the object is tatined
-  TaintPolicyHelper::UntaintArguments(back_holder);
-
-  TaintPolicyHelper::ResetArgumentsFromHandles(args, back_holder);
-
+  TaintPolicy::UntaintArguments(args);
   {
     UntaintedContextScope ctx_scope(isolate->context());
     result = FastHandleApiCallInternal(args, isolate);
   }
+  if (result->IsFailure()) goto leave;
+
+  policy_args[0] = Handle<Object>(result->ToObjectUnchecked());
+  result = TaintPolicy::AfterTaintPolicyCheck(isolate, policy_args);
+  if (!result->ToObject(&after)) goto leave;
+
+  result = TaintPolicy::TaintPolicyAction(isolate, policy_args, before, after);
 
  leave:
   back_holder.Dispose();
@@ -1433,43 +1447,48 @@ static MaybeObject* HandleApiCallAsFunctionOrConstructorTaintCheck(
                                                 is_construct_call,
                                                 args);
 
-  MaybeObject* result;
   HandleScope scope(isolate);
+  MaybeObject* result;
+  Object* before;
+  Object* after;
+
   Vector< Handle<Object> > back_holder =
     Vector< Handle<Object> >::New(dynamic_cast<Arguments*>(&args)->length());
-  TaintPolicyHelper::BackArgumentsWithHandles(args, back_holder);
+  TaintPolicy::BackArgumentsWithHandles(args, back_holder);
 
+  Vector< Handle<Object> > policy_args =
+    Vector< Handle<Object> >::New(back_holder.length() + 4);
   // TODO(petr): check if we place arguments correctly when checking taint policy
   ASSERT(0);
-  Vector< Handle<Object> > policy_args =
-    Vector< Handle<Object> >::New(back_holder.length()+3);
-  policy_args[0] = Handle<Object>::cast(
-      isolate->factory()->LookupAsciiSymbol(
-          is_construct_call ? "construct" : "call"));
-  policy_args[1] = back_holder[back_holder.length() - 5];
-  policy_args[2] = back_holder[back_holder.length() - 7];
+  policy_args[0] = Handle<Object>(isolate->heap()->undefined_value());
+  policy_args[1] = Handle<Object>(Smi::FromInt(
+      is_construct_call ? TaintPolicy::kConstruct : TaintPolicy::kCall));
+  policy_args[2] = back_holder[back_holder.length() - 5];
+  policy_args[3] = back_holder[back_holder.length() - 7];
   for (int i = 0; i < back_holder.length(); i++) {
-    policy_args[i+3] = back_holder[i];
+    policy_args[i + 4] = back_holder[i];
   }
 
-  result = Execution::TaintPolicyCheck(isolate, policy_args);
-  if (result) goto leave;
+  result = TaintPolicy::BeforeTaintPolicyCheck(isolate, policy_args);
+  if (!result->ToObject(&before)) goto leave;
 
-  // TODO(petr): get rid of this assert if needed
-  ASSERT(!TaintPolicyHelper::HasTaintedArguments(policy_args));
+  result = TaintPolicy::BeforeTaintPolicyAction(isolate, policy_args, before);
+  if (result->IsFailure()) goto leave;
 
-  // args contain handle-locations of objects, replace the values
-  // within the handle-locations if the object is tatined
-  TaintPolicyHelper::UntaintArguments(back_holder);
-
-  TaintPolicyHelper::ResetArgumentsFromHandles(args, back_holder);
-
+  TaintPolicy::UntaintArguments(args);
   {
     UntaintedContextScope ctx_scope(isolate->context());
     result = HandleApiCallAsFunctionOrConstructor(isolate,
                                                   is_construct_call,
                                                   args);
   }
+  if (result->IsFailure()) goto leave;
+
+  policy_args[0] = Handle<Object>(result->ToObjectUnchecked());
+  result = TaintPolicy::AfterTaintPolicyCheck(isolate, policy_args);
+  if (!result->ToObject(&after)) goto leave;
+
+  result = TaintPolicy::TaintPolicyAction(isolate, policy_args, before, after);
 
  leave:
   back_holder.Dispose();

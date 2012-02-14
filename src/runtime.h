@@ -389,6 +389,7 @@ namespace internal {
   F(DeepUntaint, 1, 1) \
   F(Print, 1, 1) \
   F(DeepPrint, 1, 1) \
+  F(ContextPrint, 0, 0) \
   F(GetTaintedObject, 1, 1) \
   F(Untaint, 1, 1)
 

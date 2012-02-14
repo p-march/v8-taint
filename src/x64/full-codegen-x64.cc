@@ -2292,7 +2292,7 @@ void FullCodeGenerator::EmitIsSmi(CallRuntime* expr) {
                          &if_true, &if_false, &fall_through);
 
   PrepareForBailoutBeforeSplit(expr, true, if_true, if_false);
-  if (FLAG_taint_policy) {
+  if (0 && FLAG_taint_policy) {
     __ Untaint(rax);
   }
   __ JumpIfSmi(rax, if_true);
@@ -2316,7 +2316,7 @@ void FullCodeGenerator::EmitIsNonNegativeSmi(CallRuntime* expr) {
                          &if_true, &if_false, &fall_through);
 
   PrepareForBailoutBeforeSplit(expr, true, if_true, if_false);
-  if (FLAG_taint_policy) {
+  if (0 && FLAG_taint_policy) {
     __ Untaint(rax);
   }
   Condition non_negative_smi = masm()->CheckNonNegativeSmi(rax);
@@ -2339,7 +2339,7 @@ void FullCodeGenerator::EmitIsObject(CallRuntime* expr) {
   context()->PrepareTest(&materialize_true, &materialize_false,
                          &if_true, &if_false, &fall_through);
 
-  if (FLAG_taint_policy) {
+  if (0 && FLAG_taint_policy) {
     __ Untaint(rax);
   }
   __ JumpIfSmi(rax, if_false);

@@ -39,8 +39,6 @@ function assertTaintEquals(res, op1, op2, comment) {
   %Untaint(op1);
   assertEquals(res, op1 + %Taint(op2), comment);
   %Untaint(op2);
-  assertEquals(res, %Taint(op1) + %Taint(op2), comment);
-  %Untaint(op1);
   %Untaint(op2);
 }
 

@@ -3175,6 +3175,20 @@ Local<v8::Object> v8::Object::Clone() {
 }
 
 
+bool v8::Object::IsTainted() {
+  i::Handle<i::Object> self_obj = Utils::OpenHandle(this);
+  return self_obj->IsTainted();
+}
+
+
+Local<v8::Value> v8::Object::GetTainted() {
+  i::Handle<i::Object> self_obj = Utils::OpenHandle(this);
+  i::Object* raw_result = i::Handle<i::Tainted>::cast(self_obj)->tainted_object();
+  i::Handle<i::Object> result(raw_result);
+  return Utils::ToLocal(result);
+}
+
+
 static i::Context* GetCreationContext(i::JSObject* object) {
   i::Object* constructor = object->map()->constructor();
   i::JSFunction* function;
@@ -4268,6 +4282,44 @@ void Context::AllowCodeGenerationFromStrings(bool allow) {
 }
 
 
+// TODO(petr): make proper exception reporting
+static const char* ToCString(const v8::String::Utf8Value& value) {
+  return *value ? *value : "<string conversion failed>";
+}
+
+static void ReportException(v8::TryCatch* try_catch) {
+  v8::HandleScope handle_scope;
+  v8::String::Utf8Value exception(try_catch->Exception());
+  const char* exception_string = ToCString(exception);
+  v8::Handle<v8::Message> message = try_catch->Message();
+  if (message.IsEmpty()) {
+    // V8 didn't provide any extra information about this error; just
+    // print the exception.
+    fprintf(stderr, "%s\n", exception_string);
+  } else {
+    // Print (filename):(line number): (message).
+    v8::String::Utf8Value filename(message->GetScriptResourceName());
+    const char* filename_string = ToCString(filename);
+    int linenum = message->GetLineNumber();
+    fprintf(stderr, "%s:%i: %s\n", filename_string, linenum, exception_string);
+    // Print line of source code.
+    v8::String::Utf8Value sourceline(message->GetSourceLine());
+    const char* sourceline_string = ToCString(sourceline);
+    fprintf(stderr, "%s\n", sourceline_string);
+    // Print wavy underline (GetUnderline is deprecated).
+    int start = message->GetStartColumn();
+    for (int i = 0; i < start; i++) {
+      fprintf(stderr, " ");
+    }
+    int end = message->GetEndColumn();
+    for (int i = start; i < end; i++) {
+      fprintf(stderr, "^");
+    }
+    fprintf(stderr, "\n");
+  }
+}
+
+
 bool Context::SetTaintPolicy(Handle<Context> taint_context,
                              Handle<String> source,
                              Handle<Value> file) {
@@ -4325,12 +4377,14 @@ bool Context::SetTaintPolicy(Handle<Context> taint_context,
     v8::Handle<v8::Script> script = v8::Script::Compile(source, file);
     if (script.IsEmpty()) {
       // TODO(petr): need to report an error message
+      ReportException(&try_catch);
       ASSERT(0);
       return false;
     }
     script->Run();
     if (try_catch.HasCaught()) {
       // TODO(petr): need to report an error message
+      ReportException(&try_catch);
       ASSERT(0);
       return false;
     }

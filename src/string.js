@@ -49,6 +49,11 @@ function StringToString() {
   if (!IS_STRING(this) && !IS_STRING_WRAPPER(this)) {
     throw new $TypeError('String.prototype.toString is not generic');
   }
+  
+  if (%_IsTainted(this)) {
+    return %Taint(%_ValueOf(%GetTaintedObject(this)));
+  }
+
   return %_ValueOf(this);
 }
 
@@ -58,6 +63,11 @@ function StringValueOf() {
   if (!IS_STRING(this) && !IS_STRING_WRAPPER(this)) {
     throw new $TypeError('String.prototype.valueOf is not generic');
   }
+
+  if (%_IsTainted(this)) {
+    return %Taint(%_ValueOf(%GetTaintedObject(this)));
+  }
+
   return %_ValueOf(this);
 }
 
@@ -73,6 +83,7 @@ function StringCharAt(pos) {
                         ["String.prototype.charAt"]);
   }
   var result = %WrapTaint(__StringCharAt, this, pos);
+  result = %Untaint(result);
   if (%_IsSmi(result)) {
     result = %WrapTaint(__StringCharAt, TO_STRING_INLINE(this), TO_INTEGER(pos));
   }

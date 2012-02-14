@@ -47,7 +47,7 @@ function FormatString(format, message) {
       // Two-char string starts with "%".
       var arg_num = (%_StringCharCodeAt(str, 1) - 0x30) >>> 0;
       var has_plus = str.length == 3 &&  %_StringCharCodeAt(str, 2) == 0x2b ? true : false;
-      if (arg_num < 4) {
+      if (arg_num < 5) {
         str = "";
         var limit = has_plus ? args.length : arg_num + 1;
         for (var j = arg_num; j < limit; j++) {
@@ -254,7 +254,7 @@ function FormatMessage(message) {
       "cant_prevent_ext_external_array_elements", ["Cannot prevent extension of an object with external array elements"],
       "redef_external_array_element", ["Cannot redefine a property of an object with external array elements"],
       "harmony_const_assign",         ["Assignment to constant variable."],
-      "taint_policy",                 ["Taint policy check failed (operation: '", "%0", "', object: '", "%1", "', property: '", "%2", "', args: '", "%3+", "')"],
+      "taint_policy",                 ["Taint policy check failed (operation: '", "%1", "', object: '", "%2", "', property: '", "%3", "', args: '", "%4+", "')"],
     ];
     var messages = { __proto__ : null };
     for (var i = 0; i < messagesDictionary.length; i += 2) {

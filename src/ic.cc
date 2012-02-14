@@ -446,7 +446,11 @@ void CallICBase::ReceiverToObjectIfRequired(Handle<Object> callee,
     StackFrameLocator locator;
     JavaScriptFrame* frame = locator.FindJavaScriptFrame(0);
     int index = frame->ComputeExpressionsCount() - (argc + 1);
-    frame->SetExpression(index, *isolate()->factory()->ToObject(object));
+    if (frame->GetExpression(index)->IsTainted()) {
+      frame->SetExpression(index, *Taint(isolate()->factory()->ToObject(object)));
+    } else {
+      frame->SetExpression(index, *isolate()->factory()->ToObject(object));
+    }
   }
 }
 
@@ -1864,6 +1868,15 @@ RUNTIME_FUNCTION(MaybeObject*, LoadIC_Miss) {
   LoadIC ic(isolate);
   IC::State state = IC::StateFrom(ic.target(), args[0], args[1]);
   return ic.Load(state, args.at<Object>(0), args.at<String>(1));
+  // TODO(pert): figure this out
+#if 0
+  MaybeObject* mo = ic.Load(state, args.at<Object>(0), args.at<String>(1));
+  if (!mo->IsFailure()) {
+    if (mo->ToObjectUnchecked()->IsJSFunction())
+        return mo;
+  }
+  TAINT_RETURN(mo);
+#endif
 }
 
 

@@ -65,7 +65,7 @@ namespace internal {
 
 // CLEAN(petr):
 #define RUNTIME_ASSERT(value) \
-  if (!(value)) {return isolate->ThrowIllegalOperation();}
+  if (!(value)) {ASSERT(0); return isolate->ThrowIllegalOperation();}
 
 // Cast the given object to a value of the specified type and store
 // it in a variable with the given name.  If the object is not of the
@@ -3360,7 +3360,7 @@ int Runtime::StringMatch(Isolate* isolate,
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_StringIndexOf) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   HandleScope scope(isolate);  // create a new handle scope
   ASSERT(args.length() == 3);
 
@@ -3369,12 +3369,12 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_StringIndexOf) {
 
   Object* index = args[2];
   uint32_t start_index;
-  if (!index->ToArrayIndex(&start_index)) return Smi::FromInt(-1);
+  if (!index->ToArrayIndex(&start_index)) TAINT_RETURN(Smi::FromInt(-1));
 
   RUNTIME_ASSERT(start_index <= static_cast<uint32_t>(sub->length()));
   int position =
       Runtime::StringMatch(isolate, sub, pat, start_index);
-  return Smi::FromInt(position);
+  TAINT_RETURN(Smi::FromInt(position));
 }
 
 
@@ -6375,7 +6375,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_StringTrim) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_StringSplit) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   ASSERT(args.length() == 3);
   HandleScope handle_scope(isolate);
   CONVERT_ARG_CHECKED(String, subject, 0);
@@ -6433,7 +6433,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_StringSplit) {
   ASSERT(result->HasFastElements());
 
   if (part_count == 1 && indices.at(0) == subject_length) {
-    FixedArray::cast(result->elements())->set(0, *subject);
+    FixedArray::cast(result->elements())->set(0, TAINT_IF_NEEDED(*subject));
     return *result;
   }
 
@@ -6444,7 +6444,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_StringSplit) {
     int part_end = indices.at(i);
     Handle<String> substring =
         isolate->factory()->NewProperSubString(subject, part_start, part_end);
-    elements->set(i, *substring);
+    elements->set(i, TAINT_IF_NEEDED(*substring));
     part_start = part_end + pattern_length;
   }
 
@@ -14117,6 +14117,19 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_DeepPrint) {
   printf("\n");
 #endif
   return object;
+}
+
+
+RUNTIME_FUNCTION(MaybeObject*, Runtime_ContextPrint) {
+  HandleScope scope(isolate);
+  ASSERT(args.length() == 0);
+  Context* current_context = isolate->context()->global_context();
+#ifdef DEBUG
+  printf("Runtme_ContextPrint: ");
+  current_context->Print();
+  printf("\n");
+#endif
+  return isolate->heap()->undefined_value();
 }
 
 

@@ -124,6 +124,7 @@ SOURCES = {
     strtod.cc
     stub-cache.cc
     token.cc
+    taint-policy.cc
     type-info.cc
     unicode.cc
     utils.cc

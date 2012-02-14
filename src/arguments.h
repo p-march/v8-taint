@@ -111,47 +111,6 @@ class CustomArguments : public Relocatable {
 };
 
 
-class TaintPolicyHelper {
- public:
-  static inline bool HasTaintedArguments(Vector< Handle<Object> >& args) {
-    for (int i = 0; i < args.length(); i++) {
-      if (args[i]->IsTainted()) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  static inline void UntaintArguments(Vector< Handle<Object> >& args) {
-    for (int i = 0; i < args.length(); i++) {
-      if (args[i]->IsTainted()) {
-        args[i] =
-          Handle<Object>(Handle<Tainted>::cast(args[i])->tainted_object());
-      }
-    }
-  }
-
-  static inline void BackArgumentsWithHandles(Arguments& args,
-                                       Vector< Handle<Object> >& back_holder) {
-    ASSERT(args.length() == back_holder.length());
-    for (int i = 0; i < args.length(); i++) {
-      back_holder[i] = Handle<Object>(args[i]);
-    }
-  }
-
-  static inline void ResetArgumentsFromHandles(Arguments& args,
-                                       Vector< Handle<Object> >& back_holder) {
-    ASSERT(args.length() == back_holder.length());
-    for (int i = 0; i < args.length(); i++) {
-      args[i] = *back_holder[i];
-    }
-  }
-
- private:
-  DISALLOW_IMPLICIT_CONSTRUCTORS(TaintPolicyHelper);
-};
-
-
 #define DECLARE_RUNTIME_FUNCTION(Type, Name)    \
 Type Name(Arguments args, Isolate* isolate)
 
@@ -261,6 +220,9 @@ Type Name(Arguments args, Isolate* isolate)
     } else {                                              \
       return __obj;                                       \
    } }
+
+#define TAINT_IF_NEEDED(obj)                              \
+  __tainted ? *Taint(Handle<Object>(obj)) : obj           \
 
 } }  // namespace v8::internal
 

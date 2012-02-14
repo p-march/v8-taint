@@ -1678,6 +1678,9 @@ class Object : public Value {
   V8EXPORT static Local<Object> New();
   static inline Object* Cast(Value* obj);
 
+  V8EXPORT bool IsTainted();
+  V8EXPORT Local<Value> GetTainted();
+
  private:
   V8EXPORT Object();
   V8EXPORT static void CheckCast(Value* obj);

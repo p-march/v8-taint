@@ -35,6 +35,7 @@
 #include "ic-inl.h"
 #include "stub-cache.h"
 #include "vm-state-inl.h"
+#include "taint-policy.h"
 
 namespace v8 {
 namespace internal {
@@ -946,38 +947,39 @@ MaybeObject* LoadCallbackPropertyTaintCheck(Isolate* isolate, Arguments *args) {
     return LoadCallbackPropertyInternal(isolate, args);
   
   MaybeObject* result;
-  bool taint = false;
   HandleScope scope(isolate);
+  Object* before;
+  Object* after;
+
   Vector< Handle<Object> > back_holder =
     Vector< Handle<Object> >::New(args->length());
-  TaintPolicyHelper::BackArgumentsWithHandles(*args, back_holder);
-  Vector< Handle<Object> > policy_args = Vector< Handle<Object> >::New(3);
-  policy_args[0] = Handle<Object>::cast(
-      isolate->factory()->LookupAsciiSymbol("get"));
-  policy_args[1] = back_holder[1]; // holder
-  policy_args[2] = back_holder[4]; // name
+  TaintPolicy::BackArgumentsWithHandles(*args, back_holder);
 
-  result = Execution::TaintPolicyCheck(isolate, policy_args, &taint);
-  if (result) goto leave;
+  Vector< Handle<Object> > policy_args = Vector< Handle<Object> >::New(4);
+  policy_args[0] = Handle<Object>(isolate->heap()->undefined_value());
+  policy_args[1] = Handle<Object>(Smi::FromInt(TaintPolicy::kGet));
+  policy_args[2] = back_holder[1]; // holder
+  policy_args[3] = back_holder[4]; // name
+
+  result = TaintPolicy::BeforeTaintPolicyCheck(isolate, policy_args);
+  if (!result->ToObject(&before)) goto leave;
+
+  result = TaintPolicy::BeforeTaintPolicyAction(isolate, policy_args, before);
+  if (result->IsFailure()) goto leave;
 
   // TODO(petr): get rid of this assert if needed
-  ASSERT(!TaintPolicyHelper::HasTaintedArguments(policy_args));
-
-  // args contain handle-locations of objects, replace the values
-  // within the handle-locations if the object is tatined
-  TaintPolicyHelper::UntaintArguments(back_holder);
-
-  TaintPolicyHelper::ResetArgumentsFromHandles(*args, back_holder);
-
+  ASSERT(!TaintPolicy::HasTaintedArguments(policy_args));
   {
     UntaintedContextScope ctx_scope(isolate->context());
     result = LoadCallbackPropertyInternal(isolate, args);
   }
+  if (result->IsFailure()) goto leave;
 
-  Object* obj;
-  if (taint && result->ToObject(&obj)) {
-    result = obj->Taint();
-  }
+  policy_args[0] = Handle<Object>(result->ToObjectUnchecked());
+  result = TaintPolicy::AfterTaintPolicyCheck(isolate, policy_args);
+  if (!result->ToObject(&after)) goto leave;
+
+  result = TaintPolicy::TaintPolicyAction(isolate, policy_args, before, after);
 
  leave:
   back_holder.Dispose();
@@ -1030,32 +1032,39 @@ MaybeObject* StoreCallbackPropertyTaintCheck(Isolate* isolate,
 
   MaybeObject* result;
   HandleScope scope(isolate);
+  Object* before;
+  Object* after;
+
   Vector< Handle<Object> > back_holder =
     Vector< Handle<Object> >::New(args->length());
-  TaintPolicyHelper::BackArgumentsWithHandles(*args, back_holder);
-  Vector< Handle<Object> > policy_args = Vector< Handle<Object> >::New(4);
-  policy_args[0] = Handle<Object>::cast(
-      isolate->factory()->LookupAsciiSymbol("set"));
-  policy_args[1] = back_holder[0]; // holder
-  policy_args[2] = back_holder[2]; // name
-  policy_args[2] = back_holder[3]; // value
+  TaintPolicy::BackArgumentsWithHandles(*args, back_holder);
 
-  result = Execution::TaintPolicyCheck(isolate, policy_args);
-  if (result) goto leave;
+  Vector< Handle<Object> > policy_args = Vector< Handle<Object> >::New(5);
+  policy_args[0] = Handle<Object>(isolate->heap()->undefined_value());
+  policy_args[1] = Handle<Object>(Smi::FromInt(TaintPolicy::kSet));
+  policy_args[2] = back_holder[0]; // holder
+  policy_args[3] = back_holder[2]; // name
+  policy_args[4] = back_holder[3]; // value
+
+  result = TaintPolicy::BeforeTaintPolicyCheck(isolate, policy_args);
+  if (!result->ToObject(&before)) goto leave;
+
+  result = TaintPolicy::BeforeTaintPolicyAction(isolate, policy_args, before);
+  if (result->IsFailure()) goto leave;
 
   // TODO(petr): get rid of this assert if needed
-  ASSERT(!TaintPolicyHelper::HasTaintedArguments(policy_args));
-
-  // args contain handle-locations of objects, replace the values
-  // within the handle-locations if the object is tatined
-  TaintPolicyHelper::UntaintArguments(back_holder);
-
-  TaintPolicyHelper::ResetArgumentsFromHandles(*args, back_holder);
-
+  ASSERT(!TaintPolicy::HasTaintedArguments(policy_args));
   {
     UntaintedContextScope ctx_scope(isolate->context());
     result = StoreCallbackPropertyInternal(isolate, args);
   }
+  if (result->IsFailure()) goto leave;
+
+  policy_args[0] = Handle<Object>(result->ToObjectUnchecked());
+  result = TaintPolicy::AfterTaintPolicyCheck(isolate, policy_args);
+  if (!result->ToObject(&after)) goto leave;
+
+  result = TaintPolicy::TaintPolicyAction(isolate, policy_args, before, after);
 
  leave:
   back_holder.Dispose();
@@ -1124,38 +1133,39 @@ MaybeObject* LoadPropertyWithInterceptorOnlyTaintCheck(Isolate *isolate,
     return LoadPropertyWithInterceptorOnlyInternal(isolate, args);
   
   MaybeObject* result;
-  bool taint = false;
   HandleScope scope(isolate);
+  Object* before;
+  Object* after;
+
   Vector< Handle<Object> > back_holder =
     Vector< Handle<Object> >::New(args->length());
-  TaintPolicyHelper::BackArgumentsWithHandles(*args, back_holder);
-  Vector< Handle<Object> > policy_args = Vector< Handle<Object> >::New(3);
-  policy_args[0] = Handle<Object>::cast(
-      isolate->factory()->LookupAsciiSymbol("get"));
-  policy_args[1] = back_holder[3]; // holder
-  policy_args[2] = back_holder[0]; // name
+  TaintPolicy::BackArgumentsWithHandles(*args, back_holder);
 
-  result = Execution::TaintPolicyCheck(isolate, policy_args, &taint);
-  if (result) goto leave;
+  Vector< Handle<Object> > policy_args = Vector< Handle<Object> >::New(4);
+  policy_args[0] = Handle<Object>(isolate->heap()->undefined_value());
+  policy_args[1] = Handle<Object>(Smi::FromInt(TaintPolicy::kGet));
+  policy_args[2] = back_holder[3]; // holder
+  policy_args[3] = back_holder[0]; // name
+
+  result = TaintPolicy::BeforeTaintPolicyCheck(isolate, policy_args);
+  if (!result->ToObject(&before)) goto leave;
+
+  result = TaintPolicy::BeforeTaintPolicyAction(isolate, policy_args, before);
+  if (result->IsFailure()) goto leave;
 
   // TODO(petr): get rid of this assert if needed
-  ASSERT(!TaintPolicyHelper::HasTaintedArguments(policy_args));
-
-  // args contain handle-locations of objects, replace the values
-  // within the handle-locations if the object is tatined
-  TaintPolicyHelper::UntaintArguments(back_holder);
-
-  TaintPolicyHelper::ResetArgumentsFromHandles(*args, back_holder);
-
+  ASSERT(!TaintPolicy::HasTaintedArguments(policy_args));
   {
     UntaintedContextScope ctx_scope(isolate->context());
     result = LoadPropertyWithInterceptorOnlyInternal(isolate, args);
   }
+  if (result->IsFailure()) goto leave;
 
-  Object* obj;
-  if (taint && result->ToObject(&obj)) {
-    result = obj->Taint();
-  }
+  policy_args[0] = Handle<Object>(result->ToObjectUnchecked());
+  result = TaintPolicy::AfterTaintPolicyCheck(isolate, policy_args);
+  if (!result->ToObject(&after)) goto leave;
+
+  result = TaintPolicy::TaintPolicyAction(isolate, policy_args, before, after);
 
  leave:
   back_holder.Dispose();
@@ -1243,38 +1253,39 @@ static MaybeObject* LoadWithInterceptorTaintCheck(Arguments* args,
     return LoadWithInterceptor(args, attrs);
   
   MaybeObject* result;
-  bool taint = false;
   HandleScope scope(isolate);
+  Object* before;
+  Object* after;
+
   Vector< Handle<Object> > back_holder =
     Vector< Handle<Object> >::New(args->length());
-  TaintPolicyHelper::BackArgumentsWithHandles(*args, back_holder);
-  Vector< Handle<Object> > policy_args = Vector< Handle<Object> >::New(3);
-  policy_args[0] = Handle<Object>::cast(
-      isolate->factory()->LookupAsciiSymbol("get"));
-  policy_args[1] = back_holder[3]; // holder
-  policy_args[2] = back_holder[0]; // name
+  TaintPolicy::BackArgumentsWithHandles(*args, back_holder);
 
-  result = Execution::TaintPolicyCheck(isolate, policy_args, &taint);
-  if (result) goto leave;
+  Vector< Handle<Object> > policy_args = Vector< Handle<Object> >::New(4);
+  policy_args[0] = Handle<Object>(isolate->heap()->undefined_value());
+  policy_args[1] = Handle<Object>(Smi::FromInt(TaintPolicy::kGet));
+  policy_args[2] = back_holder[3]; // holder
+  policy_args[3] = back_holder[0]; // name
+
+  result = TaintPolicy::BeforeTaintPolicyCheck(isolate, policy_args);
+  if (!result->ToObject(&before)) goto leave;
+
+  result = TaintPolicy::BeforeTaintPolicyAction(isolate, policy_args, before);
+  if (result->IsFailure()) goto leave;
 
   // TODO(petr): get rid of this assert if needed
-  ASSERT(!TaintPolicyHelper::HasTaintedArguments(policy_args));
-
-  // args contain handle-locations of objects, replace the values
-  // within the handle-locations if the object is tatined
-  TaintPolicyHelper::UntaintArguments(back_holder);
-
-  TaintPolicyHelper::ResetArgumentsFromHandles(*args, back_holder);
-
+  ASSERT(!TaintPolicy::HasTaintedArguments(policy_args));
   {
     UntaintedContextScope ctx_scope(isolate->context());
     result = LoadWithInterceptor(args, attrs);
   }
+  if (result->IsFailure()) goto leave;
 
-  Object* obj;
-  if (taint && result->ToObject(&obj)) {
-    result = obj->Taint();
-  }
+  policy_args[0] = Handle<Object>(result->ToObjectUnchecked());
+  result = TaintPolicy::AfterTaintPolicyCheck(isolate, policy_args);
+  if (!result->ToObject(&after)) goto leave;
+
+  result = TaintPolicy::TaintPolicyAction(isolate, policy_args, before, after);
 
  leave:
   back_holder.Dispose();

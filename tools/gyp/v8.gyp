@@ -449,6 +449,8 @@
             '../../src/strtod.h',
             '../../src/stub-cache.cc',
             '../../src/stub-cache.h',
+            '../../src/taint-policy.cc',
+            '../../src/taint-policy.h',
             '../../src/token.cc',
             '../../src/token.h',
             '../../src/type-info.cc',
