@@ -1815,6 +1815,11 @@ RUNTIME_FUNCTION(MaybeObject*, CallIC_Miss) {
   CallIC ic(isolate);
   IC::State state = IC::StateFrom(ic.target(), args[0], args[1]);
   Code::ExtraICState extra_ic_state = ic.target()->extra_ic_state();
+  // CLEAN(petr):
+  if(args[0]->IsTainted()) {
+    PRINT_ALL_ARGS();
+    ASSERT(!args[0]->IsTainted());
+  }
   MaybeObject* maybe_result = ic.LoadFunction(state,
                                               extra_ic_state,
                                               args.at<Object>(0),
@@ -1859,24 +1864,16 @@ RUNTIME_FUNCTION(MaybeObject*, KeyedCallIC_Miss) {
 
 // Used from ic-<arch>.cc.
 RUNTIME_FUNCTION(MaybeObject*, LoadIC_Miss) {
-  // TAINT(petr): we should have a policy hook if the object is tainted
-  // as here we have an access to a member of the tainted object and the
-  // policy should decide what to do with the result of operation
   UNTAINT_ALL_ARGS();
   HandleScope scope(isolate);
   ASSERT(args.length() == 2);
   LoadIC ic(isolate);
   IC::State state = IC::StateFrom(ic.target(), args[0], args[1]);
-  return ic.Load(state, args.at<Object>(0), args.at<String>(1));
-  // TODO(pert): figure this out
-#if 0
-  MaybeObject* mo = ic.Load(state, args.at<Object>(0), args.at<String>(1));
-  if (!mo->IsFailure()) {
-    if (mo->ToObjectUnchecked()->IsJSFunction())
-        return mo;
-  }
-  TAINT_RETURN(mo);
-#endif
+  MaybeObject* result = ic.Load(state, args.at<Object>(0), args.at<String>(1));
+  // NOTE(petr): we do not taint functions
+  if (!result->IsFailure() && result->ToObjectUnchecked()->IsJSFunction())
+    return result;
+  TAINT_RETURN(result);
 }
 
 
@@ -1940,7 +1937,7 @@ RUNTIME_FUNCTION(MaybeObject*, StoreIC_ArrayLength) {
 // it is necessary to extend the properties array of a
 // JSObject.
 RUNTIME_FUNCTION(MaybeObject*, SharedStoreIC_ExtendStorage) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation na;
   ASSERT(args.length() == 3);
 

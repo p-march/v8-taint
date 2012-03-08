@@ -1345,6 +1345,11 @@ void LCodeGen::DoBranch(LBranch* instr) {
     ASSERT(r.IsTagged());
     Register reg = ToRegister(instr->InputAt(0));
     HType type = instr->hydrogen()->value()->type();
+
+    if (FLAG_taint_policy) {
+      __ Untaint(reg);
+    }
+
     if (type.IsBoolean()) {
       __ CompareRoot(reg, Heap::kTrueValueRootIndex);
       EmitBranch(true_block, false_block, equal);

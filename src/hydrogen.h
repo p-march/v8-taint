@@ -329,6 +329,8 @@ class HGraph: public ZoneObject {
   SetOncePointer<HConstant> constant_minus1_;
   SetOncePointer<HConstant> constant_true_;
   SetOncePointer<HConstant> constant_false_;
+  SetOncePointer<HConstant> constant_tainted_true_;
+  SetOncePointer<HConstant> constant_tainted_false_;
   SetOncePointer<HConstant> constant_hole_;
   SetOncePointer<HArgumentsObject> arguments_object_;
 

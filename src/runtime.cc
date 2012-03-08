@@ -865,7 +865,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_GetPrototype) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_IsInPrototypeChain) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   ASSERT(args.length() == 2);
   // See ECMA-262, section 15.3.5.3, page 88 (steps 5 - 8).
@@ -1934,7 +1934,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_GetDefaultReceiver) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_MaterializeRegExpLiteral) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   HandleScope scope(isolate);
   ASSERT(args.length() == 4);
   CONVERT_ARG_CHECKED(FixedArray, literals, 0);
@@ -1960,7 +1960,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_MaterializeRegExpLiteral) {
     return Failure::Exception();
   }
   literals->set(index, *regexp);
-  return *regexp;
+  TAINT_RETURN(*regexp);
 }
 
 
@@ -6327,16 +6327,16 @@ MUST_USE_RESULT static MaybeObject* ConvertCase(
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_StringToLowerCase) {
-  ASSERT_IF_TAINTED_ARGS();
-  return ConvertCase<ToLowerTraits>(
-      args, isolate, isolate->runtime_state()->to_lower_mapping());
+  UNTAINT_ALL_ARGS();
+  TAINT_RETURN(ConvertCase<ToLowerTraits>(
+      args, isolate, isolate->runtime_state()->to_lower_mapping()));
 }
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_StringToUpperCase) {
-  ASSERT_IF_TAINTED_ARGS();
-  return ConvertCase<ToUpperTraits>(
-      args, isolate, isolate->runtime_state()->to_upper_mapping());
+  UNTAINT_ALL_ARGS();
+  TAINT_RETURN(ConvertCase<ToUpperTraits>(
+      args, isolate, isolate->runtime_state()->to_upper_mapping()));
 }
 
 
@@ -6625,12 +6625,12 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_NumberToIntegerMapMinusZero) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_NumberToJSUint32) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   ASSERT(args.length() == 1);
 
   CONVERT_NUMBER_CHECKED(int32_t, number, Uint32, args[0]);
-  return isolate->heap()->NumberFromUint32(number);
+  TAINT_RETURN(isolate->heap()->NumberFromUint32(number));
 }
 
 
@@ -6928,7 +6928,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_StringBuilderConcat) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_StringBuilderJoin) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   ASSERT(args.length() == 3);
   CONVERT_CHECKED(JSArray, array, args[0]);
@@ -6948,10 +6948,11 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_StringBuilderJoin) {
   }
 
   if (array_length == 0) {
-    return isolate->heap()->empty_string();
+    TAINT_RETURN(isolate->heap()->empty_string());
   } else if (array_length == 1) {
     Object* first = fixed_array->get(0);
-    if (first->IsString()) return first;
+    UNTAINT_ARG(first);
+    if (first->IsString()) TAINT_RETURN(first);
   }
 
   int separator_length = separator->length();
@@ -6964,6 +6965,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_StringBuilderJoin) {
   int length = (array_length - 1) * separator_length;
   for (int i = 0; i < array_length; i++) {
     Object* element_obj = fixed_array->get(i);
+    UNTAINT_ARG(element_obj);
     if (!element_obj->IsString()) {
       // TODO(1161): handle this case.
       return isolate->Throw(isolate->heap()->illegal_argument_symbol());
@@ -6989,7 +6991,9 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_StringBuilderJoin) {
   uc16* end = sink + length;
 #endif
 
-  String* first = String::cast(fixed_array->get(0));
+  Object *obj = fixed_array->get(0);
+  UNTAINT_ARG(obj);
+  String* first = String::cast(obj);
   int first_length = first->length();
   String::WriteToFlat(first, sink, 0, first_length);
   sink += first_length;
@@ -6999,7 +7003,9 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_StringBuilderJoin) {
     String::WriteToFlat(separator, sink, 0, separator_length);
     sink += separator_length;
 
-    String* element = String::cast(fixed_array->get(i));
+    obj = fixed_array->get(i);
+    UNTAINT_ARG(obj);
+    String* element = String::cast(obj);
     int element_length = element->length();
     ASSERT(sink + element_length <= end);
     String::WriteToFlat(element, sink, 0, element_length);
@@ -7008,7 +7014,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_StringBuilderJoin) {
   ASSERT(sink == end);
 
   ASSERT(!answer->HasOnlyAsciiChars());  // Use %_FastAsciiArrayJoin instead.
-  return answer;
+  TAINT_RETURN(answer);
 }
 
 template <typename Char>
@@ -14093,7 +14099,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_Untaint) {
 }
 
 
-// CLEAN(petr):
+// CLEAN(petr): get rid of these debugging functions
 RUNTIME_FUNCTION(MaybeObject*, Runtime_Print) {
   HandleScope scope(isolate);
   ASSERT(args.length() == 1);
@@ -14117,6 +14123,26 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_DeepPrint) {
   printf("\n");
 #endif
   return object;
+}
+
+
+RUNTIME_FUNCTION(MaybeObject*, Runtime_HasTaintPolicyContext) {
+  HandleScope scope(isolate);
+  ASSERT(args.length() == 0);
+  if (isolate->context()->HasTaintPolicyContext()) {
+    return isolate->heap()->true_value();
+  }
+  return isolate->heap()->false_value();
+}
+
+
+RUNTIME_FUNCTION(MaybeObject*, Runtime_TaintPolicyIsEnabled) {
+  HandleScope scope(isolate);
+  ASSERT(args.length() == 0);
+  if (isolate->context()->TaintPolicyIsEnabled()) {
+    return isolate->heap()->true_value();
+  }
+  return isolate->heap()->false_value();
 }
 
 

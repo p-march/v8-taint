@@ -34,14 +34,15 @@ namespace internal {
 
 class TaintPolicy : public AllStatic {
  public:
-  enum PolicyAction {
-    kDefault = 0,
-    kAllowResult,
-    kTaintResult,
-    kIgnoreResult,
-    kThrowException,
-    kInvalid
-  };
+  typedef int PolicyAction;
+
+  static const PolicyAction kDefault        = 0;
+  static const PolicyAction kNone           = 1;
+  static const PolicyAction kTaintResult    = 1 << 1;
+  static const PolicyAction kTaintHolder    = 1 << 2;
+  static const PolicyAction kIgnoreResult   = 1 << 3;
+  static const PolicyAction kThrowException = 1 << 4;
+  static const PolicyAction kInvalid        = 1 << 5;
 
   enum OperationType {
     kCall = 0,
@@ -51,65 +52,12 @@ class TaintPolicy : public AllStatic {
     kConstruct
   };
 
-  static inline PolicyAction GetPolicyAction(Object* result) {
-    if (!result->IsSmi())
-      return kInvalid;
-    switch (Smi::cast(result)->value()) {
-    case kDefault:
-      return kDefault;
-    case kAllowResult:
-      return kAllowResult;
-    case kTaintResult:
-      return kTaintResult;
-    case kIgnoreResult:
-      return kIgnoreResult;
-    case kThrowException:
-      return kThrowException;
-    }
-    return kInvalid;
-  }
+  static PolicyAction GetPolicyAction(Isolate *isolate, Object* result);
 
-  static inline OperationType GetOperationType(Object* op) {
-    ASSERT(op->IsSmi());
-
-    switch (Smi::cast(op)->value()) {
-    case kCall:
-      return kCall;
-    case kGet:
-      return kGet;
-    case kSet:
-      return kSet;
-    case kDel:
-      return kDel;
-    case kConstruct:
-      return kConstruct;
-    }
-  }
-
-  static inline PolicyAction GetDefaultPolicyAction(
-      Vector< Handle<Object> >& args);
-
-  static inline PolicyAction CombinePolicyActions(PolicyAction before,
-                                                  PolicyAction after) {
-    if (before == kThrowException || after == kThrowException) {
-      return kThrowException;
-    }
-
-    if (before == kIgnoreResult || after == kIgnoreResult) {
-      return kIgnoreResult;
-    }
-
-    if (before == kTaintResult || after == kTaintResult) {
-      return kTaintResult;
-    }
-
-    if (before == kAllowResult && after == kAllowResult) {
-      return kAllowResult;
-    }
-
-    return kInvalid;
-  }
-
+  static PolicyAction GetPolicyAction(Isolate *isolate,
+                                      Object* before_result,
+                                      Object* after_result);
+  
   static inline bool HasTaintedArguments(Vector< Handle<Object> >& args) {
     for (int i = 2; i < args.length(); i++) {
       if (args[i]->IsTainted()) {
@@ -140,6 +88,18 @@ class TaintPolicy : public AllStatic {
     }
   }
 
+  static inline void PrintArguments(Arguments& args) {
+    for (int i = 0; i < args.length(); i++) {
+      args[i]->ShortPrint(); printf("\n");
+    }
+  }
+
+  static inline void PrintArguments(Vector< Handle<Object> >& args) {
+    for (int i = 0; i < args.length(); i++) {
+      args[i]->ShortPrint(); printf("\n");
+    }
+  }
+
   static inline void UntaintArguments(Vector< Handle<Object> >& args) {
     for (int i = 0; i < args.length(); i++) {
       if (args[i]->IsTainted()) {
@@ -165,6 +125,8 @@ class TaintPolicy : public AllStatic {
     }
   }
 
+  static MaybeObject* DefaultTaintPolicyAction(Vector< Handle<Object> >& args);
+
   static MaybeObject* TaintPolicyAction(Isolate* isolate,
                                         Vector< Handle<Object> >& args,
                                         Object* before,
@@ -174,30 +136,119 @@ class TaintPolicy : public AllStatic {
                                               Vector< Handle<Object> >& args,
                                               Object* before);
 
-  // Checks taint policy for a particular object
-  // args[0] - type of operation ('get', 'set', 'call', 'construct'
-  // args[1] - holder (object the operation is being performed on)
-  // args[2] - name (for 'get'/'set' name of the method, for
-  // 'call'/construct' name of the function)
-  // args[3] - value 0 (argument to the operation)
-  // args[4] - value 1 (argument to the operation)
-  // ....
-  //
-  // If the return value is 'true' object, in case of 'get' the result
-  // of operation will be tainted, for other operations this means
-  // assert the operation. If the return value is 'false' object,
-  // do not taint the result of 'get' operations and do perform the
-  // 'call', 'set', 'construct' operations. The return value can be
-  // set to 'null' object, which enforces the default policy: do
-  // not taint the result of 'get' operation, and assert the
-  // 'set'/'call'/'construct' operation only if any of the
-  // arguments is tainted.
   static MaybeObject* BeforeTaintPolicyCheck(Isolate* isolate,
                                              Vector< Handle<Object> >& args);
+
   static MaybeObject* AfterTaintPolicyCheck(Isolate* isolate,
                                             Vector< Handle<Object> >& args);
 };
 
+
+// TODO(petr): make something smarter
+class UntaintedParamScope {
+ public:
+  inline UntaintedParamScope(Handle<JSObject>& self,
+                             Handle<String>& name,
+                             Handle<Object>& value) {
+    ptr_self = NULL;
+    ptr_name = NULL;
+    ptr_value = NULL;
+
+    if (self->IsTainted()) {
+      ptr_self = *self;
+      location_self = self.location();
+      *self.location() =
+          JSObject::cast(Handle<Tainted>::cast(self)->tainted_object());
+    }
+    
+    if (name->IsTainted()) {
+      ptr_name = *name;
+      location_name = name.location();
+      *name.location() =
+          String::cast(Handle<Tainted>::cast(name)->tainted_object());
+    }
+
+    if (value->IsTainted()) {
+      ptr_value = *value;
+      location_value = value.location();
+      *value.location() = Handle<Tainted>::cast(value)->tainted_object();
+    }
+  }
+
+  inline UntaintedParamScope(Handle<JSObject>& self,
+                             Handle<String>& name) {
+    ptr_self = NULL;
+    ptr_name = NULL;
+    ptr_value = NULL;
+
+    if (self->IsTainted()) {
+      ptr_self = *self;
+      location_self = self.location();
+      *self.location() =
+          JSObject::cast(Handle<Tainted>::cast(self)->tainted_object());
+    }
+    
+    if (name->IsTainted()) {
+      ptr_name = *name;
+      location_name = name.location();
+      *name.location() =
+          String::cast(Handle<Tainted>::cast(name)->tainted_object());
+    }
+  }
+
+  inline UntaintedParamScope(Handle<JSObject>& self,
+                             Handle<Object>& value) {
+    ptr_self = NULL;
+    ptr_name = NULL;
+    ptr_value = NULL;
+
+    if (self->IsTainted()) {
+      ptr_self = *self;
+      location_self = self.location();
+      *self.location() =
+          JSObject::cast(Handle<Tainted>::cast(self)->tainted_object());
+    }
+
+    if (value->IsTainted()) {
+      ptr_value = *value;
+      location_value = value.location();
+      *value.location() = Handle<Tainted>::cast(value)->tainted_object();
+    }
+  }
+
+  inline UntaintedParamScope(Handle<JSObject>& self) {
+    ptr_self = NULL;
+    ptr_name = NULL;
+    ptr_value = NULL;
+
+    if (self->IsTainted()) {
+      ptr_self = *self;
+      location_self = self.location();
+      *self.location() =
+          JSObject::cast(Handle<Tainted>::cast(self)->tainted_object());
+    }
+  }
+
+  inline ~UntaintedParamScope() {
+    if (ptr_self) {
+      *location_self = ptr_self;
+    }
+    if (ptr_name) {
+      *location_name = ptr_name;
+    }
+    if (ptr_value) {
+      *location_value = ptr_value;
+    }
+  }
+
+ private:
+  JSObject** location_self;
+  JSObject* ptr_self;
+  String* ptr_name;
+  String** location_name;
+  Object* ptr_value;
+  Object** location_value;
+};
 
 } }  // namespace v8::internal
 

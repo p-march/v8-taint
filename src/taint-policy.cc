@@ -36,7 +36,7 @@ namespace internal {
 
 MaybeObject* TaintPolicy::BeforeTaintPolicyCheck(Isolate* isolate,
     Vector< Handle<Object> >& args) {
-  ASSERT(isolate->context()->HasTaintPolicyContext());
+  ASSERT(isolate->context()->TaintPolicyIsEnabled());
   ASSERT(args.length() >= 3);
     
   bool has_exception = false;
@@ -44,7 +44,7 @@ MaybeObject* TaintPolicy::BeforeTaintPolicyCheck(Isolate* isolate,
   Context* current_context = isolate->context();
   Handle<Object> taint_global(current_context->GetTaintPolicyContext()->global());
 
-  UntaintedContextScope scope(current_context);
+  TaintDisabledContextScope ctx_scope(current_context);
 
   do {
     if (Handle<Smi>::cast(args[1])->value() == kConstruct) {
@@ -134,7 +134,7 @@ MaybeObject* TaintPolicy::BeforeTaintPolicyCheck(Isolate* isolate,
 
 MaybeObject* TaintPolicy::AfterTaintPolicyCheck(Isolate* isolate,
     Vector< Handle<Object> >& args) {
-  ASSERT(isolate->context()->HasTaintPolicyContext());
+  ASSERT(isolate->context()->TaintPolicyIsEnabled());
   ASSERT(args.length() >= 3);
     
   bool has_exception = false;
@@ -142,7 +142,7 @@ MaybeObject* TaintPolicy::AfterTaintPolicyCheck(Isolate* isolate,
   Context* current_context = isolate->context();
   Handle<Object> taint_global(current_context->GetTaintPolicyContext()->global());
 
-  UntaintedContextScope scope(current_context);
+  TaintDisabledContextScope ctx_scope(current_context);
 
   do {
     if (Handle<Smi>::cast(args[1])->value() == kConstruct) {
@@ -203,99 +203,162 @@ MaybeObject* TaintPolicy::AfterTaintPolicyCheck(Isolate* isolate,
 }
 
 
-MaybeObject* TaintPolicy::TaintPolicyAction(Isolate* isolate,
-                                            Vector< Handle<Object> >& args,
-                                            Object* before,
-                                            Object* after) {
-  MaybeObject* ret_val;
-  PolicyAction before_action = GetPolicyAction(before);
-  PolicyAction after_action = GetPolicyAction(after);
-
-  if (before_action == TaintPolicy::kDefault) {
-    before_action = TaintPolicy::GetDefaultPolicyAction(args);
+TaintPolicy::PolicyAction TaintPolicy::GetPolicyAction(Isolate *isolate,
+                                                       Object* result) {
+  if (result == isolate->heap()->undefined_value()) {
+    return kDefault;
   }
 
-  if (after_action == TaintPolicy::kDefault) {
-    after_action = TaintPolicy::GetDefaultPolicyAction(args);
+  if (!result->IsSmi())
+    return kInvalid;
+
+  int value = Smi::cast(result)->value();
+
+  switch (value) {
+  case kDefault:
+    return kDefault;
+  case kNone:
+    return kNone;
+  case kIgnoreResult:
+    return kIgnoreResult;
+  case kThrowException:
+    return kThrowException;
   }
 
-  switch(CombinePolicyActions(before_action, after_action)) {
-  case TaintPolicy::kAllowResult:
-    ret_val = *args[0];
-    break;
-  case TaintPolicy::kTaintResult:
-    ret_val = (*args[0])->Taint();
-    break;
-  case TaintPolicy::kIgnoreResult:
-    ret_val = isolate->heap()->undefined_value();
-    break;
-  case TaintPolicy::kThrowException:
-    ret_val = isolate->Throw(
-        *isolate->factory()->NewError("taint_policy", args));
-    break;
-  case TaintPolicy::kInvalid:
-    ASSERT(0);
-    ret_val = isolate->Throw(*isolate->factory()->NewError(
-        isolate->factory()->LookupAsciiSymbol(
-        "invalid return value in a taint function")));
-    break;
-  default:
-    UNREACHABLE();
-  }
+  if (value & ~(kTaintHolder | kTaintResult))
+    return kInvalid;
 
-  return ret_val;
+  return value;
 }
+
+
+TaintPolicy::PolicyAction TaintPolicy::GetPolicyAction(Isolate *isolate,
+                                                       Object* before_result,
+                                                       Object* after_result) {
+  PolicyAction before = GetPolicyAction(isolate, before_result);
+  PolicyAction after = GetPolicyAction(isolate, after_result);
+
+  if (before == kInvalid || after == kInvalid) {
+    return kInvalid;
+  }
+
+  if (before == kThrowException || after == kThrowException) {
+    return kThrowException;
+  }
+
+  if (before == kIgnoreResult || after == kIgnoreResult) {
+    return kIgnoreResult;
+  }
+
+  if (before & (kTaintResult | kTaintHolder) ||
+      after & (kTaintResult | kTaintHolder)) {
+    return (before | after) & (kTaintResult | kTaintHolder);
+  }
+
+  if (before == kNone || after == kNone) {
+    return kNone;
+  }
+
+  if (before == kDefault && after == kDefault) {
+    return kDefault;
+  }
+
+  return kInvalid;
+}
+
+
+MaybeObject* TaintPolicy::DefaultTaintPolicyAction(Vector< Handle<Object> >& args) {
+  if (HasTaintedArguments(args)) {
+    if (!args[2]->IsTainted() && !args[2]->GetTaintedWrapper())
+        USE(args[2]->Taint());
+    if (!args[0]->IsTainted()) {
+      if (args[0]->GetTaintedWrapper()) {
+        return args[0]->GetTaintedWrapper();
+      } else {
+        return args[0]->Taint();
+      }
+    }
+  }
+  return *args[0];
+}
+
 
 MaybeObject* TaintPolicy::BeforeTaintPolicyAction(Isolate* isolate,
                                                   Vector< Handle<Object> >& args,
                                                   Object* before) {
-  MaybeObject* ret_val;
-  PolicyAction before_action = GetPolicyAction(before);
+  PolicyAction action = GetPolicyAction(isolate, before);
 
-  if (before_action == TaintPolicy::kDefault) {
-    before_action = TaintPolicy::GetDefaultPolicyAction(args);
+  if (action & kInvalid) {
+      ASSERT(0);
+      return isolate->Throw(*isolate->factory()->NewError(
+          isolate->factory()->LookupAsciiSymbol(
+          "invalid return value in a taint function")));
   }
 
-  switch(before_action) {
-  case TaintPolicy::kAllowResult:
-  case TaintPolicy::kTaintResult:
-  case TaintPolicy::kIgnoreResult:
-    ret_val = isolate->heap()->undefined_value();
-    break;
-  case TaintPolicy::kThrowException:
-    ret_val = isolate->Throw(
-        *isolate->factory()->NewError("taint_policy", args));
-    break;
-  case TaintPolicy::kInvalid:
-    before->Print();
-    ASSERT(0);
-    ret_val = isolate->Throw(*isolate->factory()->NewError(
-        isolate->factory()->LookupAsciiSymbol(
-        "invalid return value in a taint function")));
-    break;
-  default:
-    UNREACHABLE();
+  if (action & kThrowException) {
+    return isolate->Throw(*isolate->factory()->NewError("taint_policy", args));
   }
 
-  return ret_val;
+  if (action & kIgnoreResult) {
+    return isolate->heap()->undefined_value();
+  }
+
+  if (action & kTaintHolder) {
+    if (!args[2]->IsTainted() && !args[2]->GetTaintedWrapper()) {
+      USE(args[2]->Taint());
+    }
+  }
+
+  return isolate->heap()->null_value();
 }
 
 
-TaintPolicy::PolicyAction TaintPolicy::GetDefaultPolicyAction(
-    Vector< Handle<Object> >& args) {
-  if (!HasTaintedArguments(args))
-    return kAllowResult;
+MaybeObject* TaintPolicy::TaintPolicyAction(Isolate* isolate,
+                                            Vector< Handle<Object> >& args,
+                                            Object* before,
+                                            Object* after) {
+  PolicyAction action = GetPolicyAction(isolate, before, after);
 
-  if (HasTaintedArgumentsButHolder(args))
-    return kThrowException;
-
-  /* Holder is tainted and arguments are not tainted */
-  OperationType op = GetOperationType(*args[1]);
-  if (op == kGet || op == kCall) {
-    return kTaintResult;
+  if (action == kInvalid) {
+      ASSERT(0);
+      return isolate->Throw(*isolate->factory()->NewError(
+          isolate->factory()->LookupAsciiSymbol(
+          "invalid return value in a taint function")));
   }
 
-  return kThrowException;
+  if (action == kThrowException) {
+    return isolate->Throw(*isolate->factory()->NewError("taint_policy", args));
+  }
+
+  if (action == kIgnoreResult) {
+    return isolate->heap()->undefined_value();
+  }
+
+  if (action == kNone) {
+    return *args[0];
+  }
+
+  if (action == kDefault) {
+    return DefaultTaintPolicyAction(args);
+  }
+
+  if (action & kTaintHolder) {
+    if (!args[2]->IsTainted() && !args[2]->GetTaintedWrapper()) {
+      USE(args[2]->Taint());
+    }
+  }
+
+  if (action & kTaintResult) {
+    if (!args[0]->IsTainted()) {
+      if (args[0]->GetTaintedWrapper()) {
+        return args[0]->GetTaintedWrapper();
+      } else {
+        return args[0]->Taint();
+      }
+    }
+  }
+
+  return *args[0];
 }
 
 

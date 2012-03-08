@@ -954,6 +954,7 @@ class Object : public MaybeObject {
   Object* UntaintReference();
   MaybeObject* UntaintObject();
   MaybeObject* Untaint();
+  Object* GetTaintedWrapper();
 
 #ifdef DEBUG
   // Verify a pointer is a valid object pointer.

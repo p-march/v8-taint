@@ -538,12 +538,12 @@ HConstant* HGraph::GetConstantFalse() {
 
 
 HConstant* HGraph::GetConstantTaintedTrue() {
-  return GetConstant(&constant_true_, isolate()->heap()->tainted_true_value());
+  return GetConstant(&constant_tainted_true_, isolate()->heap()->tainted_true_value());
 }
 
 
 HConstant* HGraph::GetConstantTaintedFalse() {
-  return GetConstant(&constant_false_, isolate()->heap()->tainted_false_value());
+  return GetConstant(&constant_tainted_false_, isolate()->heap()->tainted_false_value());
 }
 
 

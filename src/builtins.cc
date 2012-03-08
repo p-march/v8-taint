@@ -1193,7 +1193,7 @@ MUST_USE_RESULT static MaybeObject* HandleApiCallHelper(
 template <bool is_construct>
 MUST_USE_RESULT static MaybeObject* HandleApiCallHelperTaintCheck(
     BuiltinArguments<NEEDS_CALLED_FUNCTION> args, Isolate* isolate) {
-  if (!isolate->context()->HasTaintPolicyContext())
+  if (!isolate->context()->TaintPolicyIsEnabled())
     return HandleApiCallHelper<is_construct>(args, isolate);
   
   HandleScope scope(isolate);
@@ -1220,11 +1220,11 @@ MUST_USE_RESULT static MaybeObject* HandleApiCallHelperTaintCheck(
   if (!result->ToObject(&before)) goto leave;
 
   result = TaintPolicy::BeforeTaintPolicyAction(isolate, policy_args, before);
-  if (result->IsFailure()) goto leave;
+  if (result->IsFailure() || result == isolate->heap()->undefined_value()) goto leave;
 
   TaintPolicy::UntaintArguments(args);
   {
-    UntaintedContextScope ctx_scope(isolate->context());
+    TaintDisabledContextScope ctx_scope(isolate->context());
     result = HandleApiCallHelper<is_construct>(args, isolate);
   }
   if (result->IsFailure()) goto leave;
@@ -1317,7 +1317,7 @@ MaybeObject* FastHandleApiCallInternal(FastHandleApiCallArgumentsType args,
 
 MaybeObject* FastHandleApiCallTaintCheck(FastHandleApiCallArgumentsType args,
                                          Isolate* isolate) {
-  if (!isolate->context()->HasTaintPolicyContext())
+  if (!isolate->context()->TaintPolicyIsEnabled())
     return FastHandleApiCallInternal(args, isolate);
   
   HandleScope scope(isolate);
@@ -1345,11 +1345,11 @@ MaybeObject* FastHandleApiCallTaintCheck(FastHandleApiCallArgumentsType args,
   if (!result->ToObject(&before)) goto leave;
 
   result = TaintPolicy::BeforeTaintPolicyAction(isolate, policy_args, before);
-  if (result->IsFailure()) goto leave;
+  if (result->IsFailure() || result == isolate->heap()->undefined_value()) goto leave;
 
   TaintPolicy::UntaintArguments(args);
   {
-    UntaintedContextScope ctx_scope(isolate->context());
+    TaintDisabledContextScope ctx_scope(isolate->context());
     result = FastHandleApiCallInternal(args, isolate);
   }
   if (result->IsFailure()) goto leave;
@@ -1442,7 +1442,7 @@ static MaybeObject* HandleApiCallAsFunctionOrConstructorTaintCheck(
     Isolate* isolate,
     bool is_construct_call,
     BuiltinArguments<NO_EXTRA_ARGUMENTS> args) {
-  if (!isolate->context()->HasTaintPolicyContext())
+  if (!isolate->context()->TaintPolicyIsEnabled())
     return HandleApiCallAsFunctionOrConstructor(isolate,
                                                 is_construct_call,
                                                 args);
@@ -1473,11 +1473,11 @@ static MaybeObject* HandleApiCallAsFunctionOrConstructorTaintCheck(
   if (!result->ToObject(&before)) goto leave;
 
   result = TaintPolicy::BeforeTaintPolicyAction(isolate, policy_args, before);
-  if (result->IsFailure()) goto leave;
+  if (result->IsFailure() || result == isolate->heap()->undefined_value()) goto leave;
 
   TaintPolicy::UntaintArguments(args);
   {
-    UntaintedContextScope ctx_scope(isolate->context());
+    TaintDisabledContextScope ctx_scope(isolate->context());
     result = HandleApiCallAsFunctionOrConstructor(isolate,
                                                   is_construct_call,
                                                   args);

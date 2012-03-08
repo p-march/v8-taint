@@ -161,6 +161,7 @@ enum BindingFlags {
   V(DERIVED_SET_TRAP_INDEX, JSFunction, derived_set_trap) \
   V(PROXY_ENUMERATE, JSFunction, proxy_enumerate) \
   V(RANDOM_SEED_INDEX, ByteArray, random_seed) \
+  V(TAINT_POLICY_ENABLED_INDEX, Object, taint_policy_enabled) \
   V(TAINT_POLICY_CONTEXT_INDEX, Object, taint_policy_context)
 
 // JSFunctions are pairs (context, function code), sometimes also called
@@ -284,6 +285,7 @@ class Context: public FixedArray {
     DERIVED_SET_TRAP_INDEX,
     PROXY_ENUMERATE,
     RANDOM_SEED_INDEX,
+    TAINT_POLICY_ENABLED_INDEX,
     TAINT_POLICY_CONTEXT_INDEX,
 
     // Properties from here are treated as weak references by the full GC.
@@ -355,32 +357,49 @@ class Context: public FixedArray {
   }
 
   Context* GetTaintPolicyContext() {
-    Context* global_ctx = this;
-    if (!IsGlobalContext()) {
-      global_ctx = global_context();
-    }
-
-    Object* obj = global_ctx->get(TAINT_POLICY_CONTEXT_INDEX);
+    Object* obj = global_context()->get(TAINT_POLICY_CONTEXT_INDEX);
 
     if (obj->IsContext())
       return Context::cast(obj);
 
+    // when the taint context is the same is execution context
+    // the execution/taint context has null value which signals
+    // that this context taint and execution
     if (obj == this->map()->GetHeap()->null_value())
-      return global_ctx;
+      return global_context();
 
     return NULL;
   }
 
   void SetTaintPolicyContext(Object* value) {
-    Context* global_ctx = this;
-    if (!IsGlobalContext()) {
-      global_ctx = global_context();
-    }
-    global_ctx->set(TAINT_POLICY_CONTEXT_INDEX, value);
+    global_context()->set(TAINT_POLICY_CONTEXT_INDEX, value);
   }
 
   bool HasTaintPolicyContext() {
     return GetTaintPolicyContext() != NULL;
+  }
+
+  void TaintPolicyEnable() {
+    if (!HasTaintPolicyContext())
+      return;
+    global_context()->set(TAINT_POLICY_ENABLED_INDEX,
+                          this->map()->GetHeap()->true_value());
+  }
+
+  void TaintPolicyDisable() {
+    if (!HasTaintPolicyContext())
+      return;
+    global_context()->set(TAINT_POLICY_ENABLED_INDEX,
+                          this->map()->GetHeap()->false_value());
+  }
+
+  bool TaintPolicyIsEnabled() {
+    if (!HasTaintPolicyContext())
+      return false;
+    if (global_context()->get(TAINT_POLICY_ENABLED_INDEX) ==
+        this->map()->GetHeap()->true_value())
+      return true;
+    return false;
   }
 
   // Tells whether the global context is marked with out of memory.
@@ -458,23 +477,25 @@ class Context: public FixedArray {
 };
 
 
-class UntaintedContextScope {
+class TaintDisabledContextScope {
  public:
-  inline UntaintedContextScope(Context* current) {
-    current_context_ = Handle<Context>(current->global_context());
-    taint_context_ =
-      Handle<Context>(Context::cast(current->GetTaintPolicyContext()));
-    Object* undefined_value = current->map()->GetHeap()->undefined_value();
-    current->SetTaintPolicyContext(undefined_value);
+  inline TaintDisabledContextScope(Context* current) {
+    is_enabled = current->TaintPolicyIsEnabled();
+    if (is_enabled) {
+      current->TaintPolicyDisable();
+    }
+    current_context_ = Handle<Context>(current);
   }
 
-  inline ~UntaintedContextScope() {
-    current_context_->SetTaintPolicyContext(*taint_context_);
+  inline ~TaintDisabledContextScope() {
+    if (is_enabled) {
+      current_context_->TaintPolicyEnable();
+    }
   }
 
  private:
+  bool is_enabled;
   Handle<Context> current_context_;
-  Handle<Context> taint_context_;
 };
 
 } }  // namespace v8::internal

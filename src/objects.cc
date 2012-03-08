@@ -25,6 +25,8 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+// CLEAN(petr): fix the map-cache used by tainted objects
+#include <map>
 #include "v8.h"
 
 #include "api.h"
@@ -266,7 +268,7 @@ MaybeObject* JSObject::GetPropertyWithCallbackTaintCheck(Object* receiver,
                                                          Object* structure,
                                                          String* name) {
   Isolate* isolate = name->GetIsolate();
-  if (!isolate->context()->HasTaintPolicyContext())
+  if (!isolate->context()->TaintPolicyIsEnabled())
     return GetPropertyWithCallback(receiver, structure, name);
   // do not track __defineGetter__ and foreign callbacks
   if (structure->IsFixedArray() || structure->IsForeign())
@@ -291,10 +293,11 @@ MaybeObject* JSObject::GetPropertyWithCallbackTaintCheck(Object* receiver,
   if (!result->ToObject(&before)) goto leave;
 
   result = TaintPolicy::BeforeTaintPolicyAction(isolate, policy_args, before);
-  if (result->IsFailure()) goto leave;
+  if (result->IsFailure() || result == isolate->heap()->undefined_value()) goto leave;
 
   {
-    UntaintedContextScope ctx_scope(isolate->context());
+    TaintDisabledContextScope ctx_scope(isolate->context());
+    UntaintedParamScope param_scope(self, name_handler, receiver_handler);
     result = self->GetPropertyWithCallback(*receiver_handler,
                                            *structure_handler,
                                            *name_handler);
@@ -879,24 +882,48 @@ const char* TypeToString(InstanceType type) {
 }
 
 
+// CLEAN(petr): fix the map-cache used by tainted objects
+static std::map<Object*, Object*> debug_taint;
+
+
+Object* Object::GetTaintedWrapper() {
+  if (this->IsSpecObject()) {
+    std::map<Object*, Object*>::iterator it = debug_taint.find(this);
+    if (it != debug_taint.end()) {
+      ASSERT(Tainted::cast(it->second)->tainted_object() == this);
+      return it->second;
+    }
+  }
+
+  return NULL;
+}
+
+
 MaybeObject* Object::TaintReference() {
   ASSERT(!this->IsTainted());
   ASSERT(!this->IsSpecObject());
-  // CLEAN(petr):
-//  printf("Tainting reference %s\n", this->IsHeapObject() ?
-//         TypeToString(HeapObject::cast(this)->map()->instance_type()) : "smi");
   Object* result;
   { MaybeObject* maybe_clone = HEAP->AllocateTainted();
     if (!maybe_clone->ToObject(&result)) return maybe_clone;
   }
   Tainted::cast(result)->set_tainted_object(this);
+  // CLEAN(petr):
+  //printf("Tainting reference %s taint %p object %p\n", this->IsHeapObject() ?
+         //TypeToString(HeapObject::cast(this)->map()->instance_type()) : "smi",
+         //(void*) result, (void*)this);
+
   return result;
 }
 
-
+static int cc = 0;
 MaybeObject* Object::TaintObject() {
   ASSERT(!this->IsTainted());
   ASSERT(this->IsSpecObject());
+
+  /* Never taint functions */
+  if (HeapObject::cast(this)->map()->instance_type() == JS_FUNCTION_TYPE) {
+    return this;
+  }
 
   HeapObject* heap_obj = HeapObject::cast(this);
   Heap* heap = heap_obj->GetHeap();
@@ -950,9 +977,19 @@ MaybeObject* Object::TaintObject() {
                   (size - Tainted::kSize) / kPointerSize);
   }
 
-//  printf("Tainting object %s %p clone %p space %d\n", this->IsHeapObject() ?
-//         TypeToString(HeapObject::cast(this)->map()->instance_type()) : "smi",
-//         (void*) this, (void*)clone, space);
+  // CLEAN(petr):
+  printf("Tainting object %s %p clone %p space %d %d\n", this->IsHeapObject() ?
+         TypeToString(HeapObject::cast(this)->map()->instance_type()) : "smi",
+         (void*) this, (void*)clone, space, cc++);
+
+  // CLEAN(petr): fix the map-cache used by tainted objects
+  std::map<Object*, Object*>::iterator it = debug_taint.find(this);
+  if (it != debug_taint.end()) {
+    this->Print(); printf("\n");
+    printf("o %p t %p\n", (void*)clone, (void*)this);
+    ASSERT(it == debug_taint.end());
+  }
+  debug_taint.insert(std::pair<Object*, Object*>(clone, this));
 
   return self;
 }
@@ -984,6 +1021,11 @@ MaybeObject* Object::UntaintObject() {
   Tainted* tainted = Tainted::cast(this);
   Object* object = tainted->tainted_object();
   ASSERT(object->IsSpecObject());
+
+  std::map<Object*, Object*>::iterator it = debug_taint.find(object);
+  ASSERT(it != debug_taint.end());
+  debug_taint.erase(it);
+  printf("Untainting %p\n", (void*)this);
 
   HeapObject* heap_obj = HeapObject::cast(object);
   Heap* heap = heap_obj->GetHeap();
@@ -2238,7 +2280,7 @@ MaybeObject* JSObject::SetPropertyWithInterceptorTaintCheck(
     PropertyAttributes attributes,
     StrictModeFlag strict_mode) {
   Isolate* isolate = GetIsolate();
-  if (!isolate->context()->HasTaintPolicyContext())
+  if (!isolate->context()->TaintPolicyIsEnabled())
     return SetPropertyWithInterceptor(name, value, attributes, strict_mode);
 
   MaybeObject* result;
@@ -2260,10 +2302,11 @@ MaybeObject* JSObject::SetPropertyWithInterceptorTaintCheck(
   if (!result->ToObject(&before)) goto leave;
 
   result = TaintPolicy::BeforeTaintPolicyAction(isolate, policy_args, before);
-  if (result->IsFailure()) goto leave;
+  if (result->IsFailure() || result == isolate->heap()->undefined_value()) goto leave;
 
   {
-    UntaintedContextScope ctx_scope(isolate->context());
+    TaintDisabledContextScope ctx_scope(isolate->context());
+    UntaintedParamScope param_scope(self, name_handler, value_handler);
     result = self->SetPropertyWithInterceptor(*name_handler,
                                               *value_handler,
                                               attributes,
@@ -2370,7 +2413,7 @@ MaybeObject* JSObject::SetPropertyWithCallbackTaintCheck(
     JSObject* holder,
     StrictModeFlag strict_mode) {
   Isolate* isolate = name->GetIsolate();
-  if (!isolate->context()->HasTaintPolicyContext())
+  if (!isolate->context()->TaintPolicyIsEnabled())
     return SetPropertyWithCallback(structure,
                                    name,
                                    value,
@@ -2378,7 +2421,7 @@ MaybeObject* JSObject::SetPropertyWithCallbackTaintCheck(
                                    strict_mode);
 
   // do not track __defineGetter__ and foreign callbacks
-  if (structure->IsFixedArray() || structure->IsForeign())
+  if (structure->IsFixedArray())
     return SetPropertyWithCallback(structure,
                                    name,
                                    value,
@@ -2406,10 +2449,11 @@ MaybeObject* JSObject::SetPropertyWithCallbackTaintCheck(
   if (!result->ToObject(&before)) goto leave;
 
   result = TaintPolicy::BeforeTaintPolicyAction(isolate, policy_args, before);
-  if (result->IsFailure()) goto leave;
+  if (result->IsFailure() || result == isolate->heap()->undefined_value()) goto leave;
 
   {
-    UntaintedContextScope ctx_scope(isolate->context());
+    TaintDisabledContextScope ctx_scope(isolate->context());
+    UntaintedParamScope param_scope(self, name_handler, value_handler);
     result = self->SetPropertyWithCallback(*structure_handler,
                                            *name_handler,
                                            *value_handler,
@@ -4199,7 +4243,7 @@ MaybeObject* JSObject::DeletePropertyWithInterceptor(String* name) {
 
 MaybeObject* JSObject::DeletePropertyWithInterceptorTaintCheck(String* name) {
   Isolate* isolate = GetIsolate();
-  if (!isolate->context()->HasTaintPolicyContext())
+  if (!isolate->context()->TaintPolicyIsEnabled())
     return DeletePropertyWithInterceptor(name);
 
   MaybeObject* result;
@@ -4219,10 +4263,10 @@ MaybeObject* JSObject::DeletePropertyWithInterceptorTaintCheck(String* name) {
   if (!result->ToObject(&before)) goto leave;
 
   result = TaintPolicy::BeforeTaintPolicyAction(isolate, policy_args, before);
-  if (result->IsFailure()) goto leave;
+  if (result->IsFailure() || result == isolate->heap()->undefined_value()) goto leave;
 
   {
-    UntaintedContextScope ctx_scope(isolate->context());
+    TaintDisabledContextScope ctx_scope(isolate->context());
     result = self->DeletePropertyWithInterceptor(*name_handler);
   }
   if (result->IsFailure()) goto leave;
@@ -4277,7 +4321,7 @@ MaybeObject* JSObject::DeleteElementWithInterceptor(uint32_t index) {
 
 MaybeObject* JSObject::DeleteElementWithInterceptorTaintCheck(uint32_t index) {
   Isolate* isolate = GetIsolate();
-  if (!isolate->context()->HasTaintPolicyContext())
+  if (!isolate->context()->TaintPolicyIsEnabled())
     return DeleteElementWithInterceptor(index);
 
   MaybeObject* result;
@@ -4296,10 +4340,10 @@ MaybeObject* JSObject::DeleteElementWithInterceptorTaintCheck(uint32_t index) {
   if (!result->ToObject(&before)) goto leave;
 
   result = TaintPolicy::BeforeTaintPolicyAction(isolate, policy_args, before);
-  if (result->IsFailure()) goto leave;
+  if (result->IsFailure() || result == isolate->heap()->undefined_value()) goto leave;
 
   {
-    UntaintedContextScope ctx_scope(isolate->context());
+    TaintDisabledContextScope ctx_scope(isolate->context());
     result = self->DeleteElementWithInterceptor(index);
   }
   if (result->IsFailure()) goto leave;
@@ -9395,7 +9439,7 @@ MaybeObject* JSObject::SetElementWithInterceptorTaintCheck(
     StrictModeFlag strict_mode,
     bool check_prototype) {
   Isolate* isolate = GetIsolate();
-  if (!isolate->context()->HasTaintPolicyContext())
+  if (!isolate->context()->TaintPolicyIsEnabled())
     return SetElementWithInterceptor(index,
                                      value,
                                      strict_mode,
@@ -9419,10 +9463,11 @@ MaybeObject* JSObject::SetElementWithInterceptorTaintCheck(
   if (!result->ToObject(&before)) goto leave;
 
   result = TaintPolicy::BeforeTaintPolicyAction(isolate, policy_args, before);
-  if (result->IsFailure()) goto leave;
+  if (result->IsFailure() || result == isolate->heap()->undefined_value()) goto leave;
 
   {
-    UntaintedContextScope ctx_scope(isolate->context());
+    TaintDisabledContextScope ctx_scope(isolate->context());
+    UntaintedParamScope param_scope(self, value_handler);
     result = self->SetElementWithInterceptor(index,
                                              *value_handler,
                                              strict_mode,
@@ -9494,7 +9539,7 @@ MaybeObject* JSObject::GetElementWithCallbackTaintCheck(Object* receiver,
                                                         uint32_t index,
                                                         Object* holder) {
   Isolate* isolate = GetIsolate();
-  if (!isolate->context()->HasTaintPolicyContext())
+  if (!isolate->context()->TaintPolicyIsEnabled())
     return GetElementWithCallback(receiver, structure, index, holder);
 
   // do not track __defineGetter__ callbacks as they are
@@ -9521,10 +9566,11 @@ MaybeObject* JSObject::GetElementWithCallbackTaintCheck(Object* receiver,
   if (!result->ToObject(&before)) goto leave;
 
   result = TaintPolicy::BeforeTaintPolicyAction(isolate, policy_args, before);
-  if (result->IsFailure()) goto leave;
+  if (result->IsFailure() || result == isolate->heap()->undefined_value()) goto leave;
 
   {
-    UntaintedContextScope ctx_scope(isolate->context());
+    TaintDisabledContextScope ctx_scope(isolate->context());
+    UntaintedParamScope param_scope(self);
     result = self->GetElementWithCallback(*receiver_handler,
                                           *structure_handler,
                                           index,
@@ -9616,7 +9662,7 @@ MaybeObject* JSObject::SetElementWithCallbackTaintCheck(
     JSObject* holder,
     StrictModeFlag strict_mode) {
   Isolate* isolate = GetIsolate();
-  if (!isolate->context()->HasTaintPolicyContext())
+  if (!isolate->context()->TaintPolicyIsEnabled())
     return SetElementWithCallback(structure,
                                   index,
                                   value,
@@ -9652,10 +9698,11 @@ MaybeObject* JSObject::SetElementWithCallbackTaintCheck(
   if (!result->ToObject(&before)) goto leave;
 
   result = TaintPolicy::BeforeTaintPolicyAction(isolate, policy_args, before);
-  if (result->IsFailure()) goto leave;
+  if (result->IsFailure() || result == isolate->heap()->undefined_value()) goto leave;
 
   {
-    UntaintedContextScope ctx_scope(isolate->context());
+    TaintDisabledContextScope ctx_scope(isolate->context());
+    UntaintedParamScope param_scope(self, value_handler);
     result = self->SetElementWithCallback(*structure_handler,
                                           index,
                                           *value_handler,
@@ -10249,7 +10296,7 @@ MaybeObject* JSObject::GetElementWithInterceptor(Object* receiver,
 MaybeObject* JSObject::GetElementWithInterceptorTaintCheck(Object* receiver,
                                                            uint32_t index) {
   Isolate* isolate = GetIsolate();
-  if (!isolate->context()->HasTaintPolicyContext())
+  if (!isolate->context()->TaintPolicyIsEnabled())
     return GetElementWithInterceptor(receiver, index);
 
   MaybeObject* result;
@@ -10269,10 +10316,11 @@ MaybeObject* JSObject::GetElementWithInterceptorTaintCheck(Object* receiver,
   if (!result->ToObject(&before)) goto leave;
 
   result = TaintPolicy::BeforeTaintPolicyAction(isolate, policy_args, before);
-  if (result->IsFailure()) goto leave;
+  if (result->IsFailure() || result == isolate->heap()->undefined_value()) goto leave;
 
   {
-    UntaintedContextScope ctx_scope(isolate->context());
+    TaintDisabledContextScope ctx_scope(isolate->context());
+    UntaintedParamScope param_scope(self);
     result = self->GetElementWithInterceptor(*receiver_handler, index);
   }
   if (result->IsFailure()) goto leave;
@@ -10566,7 +10614,7 @@ MaybeObject* JSObject::GetPropertyWithInterceptorTaintCheck(
     String* name,
     PropertyAttributes* attributes) {
   Isolate* isolate = GetIsolate();
-  if (!isolate->context()->HasTaintPolicyContext())
+  if (!isolate->context()->TaintPolicyIsEnabled())
     return GetPropertyWithInterceptor(receiver, name, attributes);
  
   MaybeObject* result;
@@ -10587,10 +10635,11 @@ MaybeObject* JSObject::GetPropertyWithInterceptorTaintCheck(
   if (!result->ToObject(&before)) goto leave;
 
   result = TaintPolicy::BeforeTaintPolicyAction(isolate, policy_args, before);
-  if (result->IsFailure()) goto leave;
+  if (result->IsFailure() || result == isolate->heap()->undefined_value()) goto leave;
 
   {
-    UntaintedContextScope ctx_scope(isolate->context());
+    TaintDisabledContextScope ctx_scope(isolate->context());
+    UntaintedParamScope param_scope(self, name_handler);
     result = self->GetPropertyWithInterceptor(*receiver_handler,
                                               *name_handler,
                                               attributes);

@@ -4235,6 +4235,17 @@ Local<Object> AccessorInfo::Holder() const {
 }
 
 
+class TaintEnabledContextScope {
+ public:
+  TaintEnabledContextScope(Handle<Context> current);
+  ~TaintEnabledContextScope();
+
+ private:
+  bool is_enabled;
+  Handle<Context> current_context_;
+};
+
+
 /**
  * \example shell.cc
  * A simple shell that takes a list of expressions on the

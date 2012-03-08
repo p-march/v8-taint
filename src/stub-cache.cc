@@ -943,7 +943,7 @@ MaybeObject* LoadCallbackPropertyInternal(Isolate* isolate, Arguments *args) {
 
 
 MaybeObject* LoadCallbackPropertyTaintCheck(Isolate* isolate, Arguments *args) {
-  if (!isolate->context()->HasTaintPolicyContext())
+  if (!isolate->context()->TaintPolicyIsEnabled())
     return LoadCallbackPropertyInternal(isolate, args);
   
   MaybeObject* result;
@@ -965,12 +965,12 @@ MaybeObject* LoadCallbackPropertyTaintCheck(Isolate* isolate, Arguments *args) {
   if (!result->ToObject(&before)) goto leave;
 
   result = TaintPolicy::BeforeTaintPolicyAction(isolate, policy_args, before);
-  if (result->IsFailure()) goto leave;
+  if (result->IsFailure() || result == isolate->heap()->undefined_value()) goto leave;
 
   // TODO(petr): get rid of this assert if needed
   ASSERT(!TaintPolicy::HasTaintedArguments(policy_args));
   {
-    UntaintedContextScope ctx_scope(isolate->context());
+    TaintDisabledContextScope ctx_scope(isolate->context());
     result = LoadCallbackPropertyInternal(isolate, args);
   }
   if (result->IsFailure()) goto leave;
@@ -1027,7 +1027,7 @@ MaybeObject* StoreCallbackPropertyInternal(Isolate* isolate, Arguments *args) {
 
 MaybeObject* StoreCallbackPropertyTaintCheck(Isolate* isolate,
                                              Arguments *args) {
-  if (!isolate->context()->HasTaintPolicyContext())
+  if (!isolate->context()->TaintPolicyIsEnabled())
     return StoreCallbackPropertyInternal(isolate, args);
 
   MaybeObject* result;
@@ -1050,12 +1050,12 @@ MaybeObject* StoreCallbackPropertyTaintCheck(Isolate* isolate,
   if (!result->ToObject(&before)) goto leave;
 
   result = TaintPolicy::BeforeTaintPolicyAction(isolate, policy_args, before);
-  if (result->IsFailure()) goto leave;
+  if (result->IsFailure() || result == isolate->heap()->undefined_value()) goto leave;
 
   // TODO(petr): get rid of this assert if needed
   ASSERT(!TaintPolicy::HasTaintedArguments(policy_args));
   {
-    UntaintedContextScope ctx_scope(isolate->context());
+    TaintDisabledContextScope ctx_scope(isolate->context());
     result = StoreCallbackPropertyInternal(isolate, args);
   }
   if (result->IsFailure()) goto leave;
@@ -1129,7 +1129,7 @@ MaybeObject* LoadPropertyWithInterceptorOnlyInternal(Isolate* isolate,
 
 MaybeObject* LoadPropertyWithInterceptorOnlyTaintCheck(Isolate *isolate,
                                                        Arguments *args) {
-  if (!isolate->context()->HasTaintPolicyContext())
+  if (!isolate->context()->TaintPolicyIsEnabled())
     return LoadPropertyWithInterceptorOnlyInternal(isolate, args);
   
   MaybeObject* result;
@@ -1151,12 +1151,12 @@ MaybeObject* LoadPropertyWithInterceptorOnlyTaintCheck(Isolate *isolate,
   if (!result->ToObject(&before)) goto leave;
 
   result = TaintPolicy::BeforeTaintPolicyAction(isolate, policy_args, before);
-  if (result->IsFailure()) goto leave;
+  if (result->IsFailure() || result == isolate->heap()->undefined_value()) goto leave;
 
   // TODO(petr): get rid of this assert if needed
   ASSERT(!TaintPolicy::HasTaintedArguments(policy_args));
   {
-    UntaintedContextScope ctx_scope(isolate->context());
+    TaintDisabledContextScope ctx_scope(isolate->context());
     result = LoadPropertyWithInterceptorOnlyInternal(isolate, args);
   }
   if (result->IsFailure()) goto leave;
@@ -1249,7 +1249,7 @@ static MaybeObject* LoadWithInterceptor(Arguments* args,
 static MaybeObject* LoadWithInterceptorTaintCheck(Arguments* args,
                                                   PropertyAttributes* attrs) {
   Isolate* isolate = HeapObject::cast((*args)[0])->GetIsolate();
-  if (!isolate->context()->HasTaintPolicyContext())
+  if (!isolate->context()->TaintPolicyIsEnabled())
     return LoadWithInterceptor(args, attrs);
   
   MaybeObject* result;
@@ -1271,12 +1271,12 @@ static MaybeObject* LoadWithInterceptorTaintCheck(Arguments* args,
   if (!result->ToObject(&before)) goto leave;
 
   result = TaintPolicy::BeforeTaintPolicyAction(isolate, policy_args, before);
-  if (result->IsFailure()) goto leave;
+  if (result->IsFailure() || result == isolate->heap()->undefined_value()) goto leave;
 
   // TODO(petr): get rid of this assert if needed
   ASSERT(!TaintPolicy::HasTaintedArguments(policy_args));
   {
-    UntaintedContextScope ctx_scope(isolate->context());
+    TaintDisabledContextScope ctx_scope(isolate->context());
     result = LoadWithInterceptor(args, attrs);
   }
   if (result->IsFailure()) goto leave;

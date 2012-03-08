@@ -4408,9 +4408,9 @@ bool Context::SetTaintPolicy(Handle<Context> taint_context,
   }
   
   if (!no_taint_context) {
-    context->set_taint_policy_context(*Utils::OpenHandle(*taint_context));
+    context->SetTaintPolicyContext(*Utils::OpenHandle(*taint_context));
   } else {
-    context->set_taint_policy_context(isolate->heap()->null_value());
+    context->SetTaintPolicyContext(isolate->heap()->null_value());
   }
 
   return true;
@@ -6200,6 +6200,24 @@ void Testing::PrepareStressRun(int run) {
 
 void Testing::DeoptimizeAll() {
   internal::Deoptimizer::DeoptimizeAll();
+}
+
+
+TaintEnabledContextScope::TaintEnabledContextScope(Handle<Context> current) {
+  current_context_ = current;
+  i::Context* ctx = *reinterpret_cast<i::Context**>(*current_context_);
+  is_enabled = ctx->TaintPolicyIsEnabled();
+  if (!is_enabled) {
+    ctx->TaintPolicyEnable();
+  }
+}
+
+
+TaintEnabledContextScope::~TaintEnabledContextScope() {
+  if (!is_enabled) {
+    i::Context* ctx = *reinterpret_cast<i::Context**>(*current_context_);
+    ctx->TaintPolicyDisable();
+  }
 }
 
 
