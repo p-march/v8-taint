@@ -4282,7 +4282,7 @@ void Context::AllowCodeGenerationFromStrings(bool allow) {
 }
 
 
-// TODO(petr): make proper exception reporting
+// CLEAN(petr): make proper exception reporting
 static const char* ToCString(const v8::String::Utf8Value& value) {
   return *value ? *value : "<string conversion failed>";
 }
