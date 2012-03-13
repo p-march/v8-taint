@@ -1281,6 +1281,24 @@ void JSObject::initialize_elements() {
 }
 
 
+void JSObject::initialize_tainted() {
+  // NOTE(petr): we cannot set false_value here
+  // as it may not exist yet
+  WRITE_FIELD(this, kTaintedOffset, Smi::FromInt(0));
+}
+
+
+void JSObject::set_tainted(Object *value, WriteBarrierMode mode) {
+  WRITE_FIELD(this, kTaintedOffset, value);
+  WRITE_BARRIER(GetHeap(), this, kTaintedOffset, value);
+}
+
+
+Object* JSObject::tainted() {
+  return READ_FIELD(this, kTaintedOffset);
+}
+
+
 MaybeObject* JSObject::ResetElements() {
   Object* obj;
   ElementsKind elements_kind = FLAG_smi_only_arrays

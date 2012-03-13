@@ -87,6 +87,7 @@ void FastNewClosureStub::Generate(MacroAssembler* masm) {
   // write barrier because the allocated object is in new space.
   Factory* factory = masm->isolate()->factory();
   __ mov(ebx, Immediate(factory->empty_fixed_array()));
+  __ mov(FieldOperand(eax, JSObject::kTaintedOffset), Immediate(0));
   __ mov(FieldOperand(eax, JSObject::kPropertiesOffset), ebx);
   __ mov(FieldOperand(eax, JSObject::kElementsOffset), ebx);
   __ mov(FieldOperand(eax, JSFunction::kPrototypeOrInitialMapOffset),
@@ -4074,6 +4075,7 @@ void RegExpConstructResultStub::Generate(MacroAssembler* masm) {
   __ mov(FieldOperand(eax, JSObject::kPropertiesOffset), ecx);
   __ mov(edx, ContextOperand(edx, Context::REGEXP_RESULT_MAP_INDEX));
   __ mov(FieldOperand(eax, HeapObject::kMapOffset), edx);
+  __ mov(FieldOperand(eax, JSObject::kTaintedOffset), Immediate(0));
 
   // Set input, index and length fields from arguments.
   __ mov(ecx, Operand(esp, kPointerSize * 1));

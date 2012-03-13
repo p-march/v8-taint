@@ -3812,7 +3812,7 @@ class Internals {
       InternalConstants<kApiPointerSize>::kStringResourceOffset;
 
   static const int kForeignAddressOffset = kApiPointerSize;
-  static const int kJSObjectHeaderSize = 3 * kApiPointerSize;
+  static const int kJSObjectHeaderSize = 4 * kApiPointerSize;
   static const int kFullStringRepresentationMask = 0x07;
   static const int kExternalTwoByteRepresentationTag = 0x02;
 

@@ -946,14 +946,15 @@ class Object : public MaybeObject {
   // Object tainting. If an object is pass-by-reference, we use TaintObject and
   // overwrite it in place. If an object is pass-by-value, we use TaintReference
   // and wrap reference to the object with Tainted object
+  MUST_USE_RESULT MaybeObject* Taint();
   MUST_USE_RESULT MaybeObject* TaintReference();
   MUST_USE_RESULT MaybeObject* TaintObject();
-  MUST_USE_RESULT MaybeObject* Taint();
 
   // Object untainting
+  MaybeObject* Untaint();
   Object* UntaintReference();
   MaybeObject* UntaintObject();
-  MaybeObject* Untaint();
+
   Object* GetTaintedWrapper();
 
 #ifdef DEBUG
@@ -1426,6 +1427,11 @@ class JSReceiver: public HeapObject {
 // caching.
 class JSObject: public JSReceiver {
  public:
+  // [tainted]: if the object is tainted, this field should containt a pointer
+  // to a wrapper Tainted object
+  DECL_ACCESSORS(tainted, Object);
+  inline void initialize_tainted();
+
   // [properties]: Backing storage for properties.
   // properties is a FixedArray in the fast case and a Dictionary in the
   // slow case.
@@ -2012,7 +2018,8 @@ class JSObject: public JSReceiver {
   static const int kFieldsAdded = 3;
 
   // Layout description.
-  static const int kPropertiesOffset = HeapObject::kHeaderSize;
+  static const int kTaintedOffset = HeapObject::kHeaderSize;
+  static const int kPropertiesOffset = kTaintedOffset + kPointerSize;
   static const int kElementsOffset = kPropertiesOffset + kPointerSize;
   static const int kHeaderSize = kElementsOffset + kPointerSize;
 

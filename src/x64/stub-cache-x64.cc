@@ -2970,6 +2970,7 @@ Handle<Code> ConstructStubCompiler::CompileConstructStub(
   // rdx: JSObject (untagged)
   __ movq(Operand(rdx, JSObject::kMapOffset), rbx);
   __ Move(rbx, factory()->empty_fixed_array());
+  __ movq(Operand(rdx, JSObject::kTaintedOffset), Immediate(0));
   __ movq(Operand(rdx, JSObject::kPropertiesOffset), rbx);
   __ movq(Operand(rdx, JSObject::kElementsOffset), rbx);
 

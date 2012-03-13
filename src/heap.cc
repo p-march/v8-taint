@@ -3420,6 +3420,7 @@ void Heap::InitializeFunction(JSFunction* function,
                               SharedFunctionInfo* shared,
                               Object* prototype) {
   ASSERT(!prototype->IsMap());
+  function->initialize_tainted();
   function->initialize_properties();
   function->initialize_elements();
   function->set_shared(shared);
@@ -3631,6 +3632,7 @@ MaybeObject* Heap::AllocateInitialMap(JSFunction* fun) {
 void Heap::InitializeJSObjectFromMap(JSObject* obj,
                                      FixedArray* properties,
                                      Map* map) {
+  obj->initialize_tainted();
   obj->set_properties(properties);
   obj->initialize_elements();
   // TODO(1240798): Initialize the object's body using valid initial values

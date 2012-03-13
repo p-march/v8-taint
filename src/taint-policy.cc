@@ -57,41 +57,36 @@ MaybeObject* TaintPolicy::BeforeTaintPolicyCheck(Isolate* isolate,
     }
   
     Handle<Object> holder = args[2];
-    Handle<JSFunction> func;
     Handle<String> name =
-      isolate->factory()->LookupAsciiSymbol("BeforeTaintPolicyFunction");
-    i::Object* func_obj;
+      isolate->factory()->LookupAsciiSymbol("TaintPolicyBeforeFunctions");
   
-    // check if there is a taint policy function installed on the holder
-    // object
-    i::MaybeObject* maybe_obj = holder->IsTainted() ?
+    // check if there are taint policy functions installed on the holder
+    MaybeObject* maybe_obj = holder->IsTainted() ?
           Handle<Tainted>::cast(holder)->tainted_object()->GetProperty(*name) :
           holder->GetProperty(*name);
-    ASSERT(!maybe_obj->IsFailure());
-    func_obj = maybe_obj->ToObjectUnchecked();
+    if (maybe_obj->IsFailure()) return maybe_obj;
+    Object* value = maybe_obj->ToObjectUnchecked();
   
-    // leave if the policy function is null for the object
-    if (func_obj == isolate->heap()->null_value()) {
+    // leave if the policy functions set to null for the object
+    // this means that the default action should be invoked
+    if (value == isolate->heap()->null_value()) {
       break;
     }
   
-    if (func_obj == isolate->heap()->undefined_value()) {
-      // call into policy engine to get the policy function for the
-      // holder object which also may be installed on the holder
-      // object for future policy checks
+    if (value == isolate->heap()->undefined_value()) {
+      // call into policy engine to get the policy functions
+      // set for the holder
       name = isolate->factory()->LookupAsciiSymbol("TaintPolicyEngine");
       maybe_obj = taint_global->GetProperty(*name);
-      if (maybe_obj->IsFailure()) {
-        return maybe_obj;
-      }
-      func_obj = maybe_obj->ToObjectUnchecked();
-      if (!func_obj->IsJSFunction()) {
+      if (maybe_obj->IsFailure()) return maybe_obj;
+      value = maybe_obj->ToObjectUnchecked();
+      if (!value->IsJSFunction()) {
         return isolate->Throw(*isolate->factory()->NewError(
             isolate->factory()->LookupAsciiSymbol(
-            "BeforeTaintPolicyEngine() is missing")));
+            "TaintPolicyEngine() is missing")));
       }
-  
-      func = Handle<JSFunction>(JSFunction::cast(func_obj));
+    
+      Handle<JSFunction> func = Handle<JSFunction>(JSFunction::cast(value));
       Handle<Object> retval = Execution::Call(func,
                                               taint_global,
                                               args.length(),
@@ -101,25 +96,29 @@ MaybeObject* TaintPolicy::BeforeTaintPolicyCheck(Isolate* isolate,
         ASSERT(retval.is_null());
         return Failure::Exception();;
       }
-  
+
       result = *retval;
       break;
     }
-  
-    if (!func_obj->IsJSFunction()) {
+
+    name = isolate->factory()->LookupAsciiSymbol("RunTaintPolicyBeforeFunctions");
+    maybe_obj = taint_global->GetProperty(*name);
+    if (maybe_obj->IsFailure() ||
+        !maybe_obj->ToObjectUnchecked()->IsJSFunction()) {
       return isolate->Throw(*isolate->factory()->NewError(
           isolate->factory()->LookupAsciiSymbol(
-          "TaintPolicyFunction() is not set properly")));
+          "RunTaintPolicyBeforeFunctions() is missing")));
     }
-  
-    // call holder's policy function
-    func = Handle<JSFunction>(JSFunction::cast(func_obj));
+
+    Handle<JSFunction> func = Handle<JSFunction>(
+        JSFunction::cast(maybe_obj->ToObjectUnchecked()));
     Handle<Object> retval = Execution::Call(func,
                                             taint_global,
                                             args.length(),
                                             args.start(),
                                             &has_exception);
     if (has_exception) {
+      ASSERT(retval.is_null());
       return Failure::Exception();;
     }
 
@@ -155,36 +154,33 @@ MaybeObject* TaintPolicy::AfterTaintPolicyCheck(Isolate* isolate,
     }
   
     Handle<Object> holder = args[2];
-    Handle<JSFunction> func;
     Handle<String> name =
-      isolate->factory()->LookupAsciiSymbol("AfterTaintPolicyFunction");
-    i::Object* func_obj;
+      isolate->factory()->LookupAsciiSymbol("TaintPolicyAfterFunctions");
   
-    // check if there is a taint policy function installed on the holder
-    // object
-    i::MaybeObject* maybe_obj = holder->IsTainted() ?
+    // check if there are taint policy functions installed on the holder
+    MaybeObject* maybe_obj = holder->IsTainted() ?
           Handle<Tainted>::cast(holder)->tainted_object()->GetProperty(*name) :
           holder->GetProperty(*name);
-    ASSERT(!maybe_obj->IsFailure());
-    func_obj = maybe_obj->ToObjectUnchecked();
+    if (maybe_obj->IsFailure()) return maybe_obj;
+    Object* value = maybe_obj->ToObjectUnchecked();
   
     // leave if the policy function is null for the object
-    if (func_obj == isolate->heap()->null_value()) {
+    if (value == isolate->heap()->null_value()) {
       break;
     }
-  
-    if (func_obj == isolate->heap()->undefined_value()) {
-      break;
-    }
-  
-    if (!func_obj->IsJSFunction()) {
+
+    name = isolate->factory()->LookupAsciiSymbol("RunTaintPolicyAfterFunctions");
+    maybe_obj = taint_global->GetProperty(*name);
+    if (maybe_obj->IsFailure() ||
+        !maybe_obj->ToObjectUnchecked()->IsJSFunction()) {
       return isolate->Throw(*isolate->factory()->NewError(
           isolate->factory()->LookupAsciiSymbol(
-          "AfterTaintPolicyFunction() is not set properly")));
+          "RunTaintPolicyAfterFunctions() is missing")));
     }
-  
+
     // call holder's policy function
-    func = Handle<JSFunction>(JSFunction::cast(func_obj));
+    Handle<JSFunction> func = Handle<JSFunction>(
+        JSFunction::cast(maybe_obj->ToObjectUnchecked()));
     Handle<Object> retval = Execution::Call(func,
                                             taint_global,
                                             args.length(),
@@ -269,14 +265,11 @@ TaintPolicy::PolicyAction TaintPolicy::GetPolicyAction(Isolate *isolate,
 
 MaybeObject* TaintPolicy::DefaultTaintPolicyAction(Vector< Handle<Object> >& args) {
   if (HasTaintedArguments(args)) {
-    if (!args[2]->IsTainted() && !args[2]->GetTaintedWrapper())
-        USE(args[2]->Taint());
-    if (!args[0]->IsTainted()) {
-      if (args[0]->GetTaintedWrapper()) {
-        return args[0]->GetTaintedWrapper();
-      } else {
-        return args[0]->Taint();
-      }
+    if (!args[2]->IsTainted() && !args[2]->GetTaintedWrapper()) {
+      USE(args[2]->Taint());
+    }
+    if (!args[0]->IsTainted() && !args[0]->GetTaintedWrapper()) {
+      return args[0]->Taint();
     }
   }
   return *args[0];
@@ -349,12 +342,8 @@ MaybeObject* TaintPolicy::TaintPolicyAction(Isolate* isolate,
   }
 
   if (action & kTaintResult) {
-    if (!args[0]->IsTainted()) {
-      if (args[0]->GetTaintedWrapper()) {
-        return args[0]->GetTaintedWrapper();
-      } else {
-        return args[0]->Taint();
-      }
+    if (!args[0]->IsTainted() && !args[0]->GetTaintedWrapper()) {
+      return args[0]->Taint();
     }
   }
 

@@ -170,6 +170,12 @@ Type Name(Arguments args, Isolate* isolate)
     args[i]->Print();                                     \
     printf("\n");                                         \
   }
+#define SHORTPRINT_ALL_ARGS()                             \
+  for (int i = 0; i < args.length(); i++) {               \
+    printf("arg %d: ", i);                                \
+    args[i]->ShortPrint();                                \
+    printf("\n");                                         \
+  }
 #define PRINT_ARGS(args)                                  \
   for (int i = 0; i < args.length(); i++) {               \
     printf("arg %d: ", i);                                \

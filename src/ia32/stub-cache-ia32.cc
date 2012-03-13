@@ -3123,6 +3123,7 @@ Handle<Code> ConstructStubCompiler::CompileConstructStub(
   // edx: JSObject (untagged)
   __ mov(Operand(edx, JSObject::kMapOffset), ebx);
   __ mov(ebx, factory()->empty_fixed_array());
+  __ Move(Operand(edx, JSObject::kTaintedsOffset), Smi::FromInt(0));
   __ mov(Operand(edx, JSObject::kPropertiesOffset), ebx);
   __ mov(Operand(edx, JSObject::kElementsOffset), ebx);
 

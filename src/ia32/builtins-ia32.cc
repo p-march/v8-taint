@@ -198,6 +198,7 @@ static void Generate_JSConstructStubHelper(MacroAssembler* masm,
       __ mov(Operand(ebx, JSObject::kMapOffset), eax);
       Factory* factory = masm->isolate()->factory();
       __ mov(ecx, factory->empty_fixed_array());
+      __ mov(Operand(ebx, JSObject::kTaintedOffset), Immediate(0));
       __ mov(Operand(ebx, JSObject::kPropertiesOffset), ecx);
       __ mov(Operand(ebx, JSObject::kElementsOffset), ecx);
       // Set extra fields in the newly allocated object.
@@ -953,6 +954,7 @@ static void AllocateEmptyJSArray(MacroAssembler* masm,
   // scratch2: start of next object
   __ mov(FieldOperand(result, JSObject::kMapOffset), scratch1);
   Factory* factory = masm->isolate()->factory();
+  __ mov(FieldOperand(result, JSObject::kTaintedOffset), Immediate(0));
   __ mov(FieldOperand(result, JSArray::kPropertiesOffset),
          factory->empty_fixed_array());
   // Field JSArray::kElementsOffset is initialized later.
@@ -1060,6 +1062,7 @@ static void AllocateJSArray(MacroAssembler* masm,
   __ mov(FieldOperand(result, JSObject::kMapOffset), elements_array);
   Factory* factory = masm->isolate()->factory();
   __ mov(elements_array, factory->empty_fixed_array());
+  __ mov(FieldOperand(result, JSObject::kTaintedOffset), Immediate(0));
   __ mov(FieldOperand(result, JSArray::kPropertiesOffset), elements_array);
   // Field JSArray::kElementsOffset is initialized later.
   __ mov(FieldOperand(result, JSArray::kLengthOffset), array_size);

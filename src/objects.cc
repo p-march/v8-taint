@@ -25,8 +25,6 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-// CLEAN(petr): fix the map-cache used by tainted objects
-#include <map>
 #include "v8.h"
 
 #include "api.h"
@@ -882,20 +880,14 @@ const char* TypeToString(InstanceType type) {
 }
 
 
-// CLEAN(petr): fix the map-cache used by tainted objects
-static std::map<Object*, Object*> debug_taint;
-
-
 Object* Object::GetTaintedWrapper() {
-  if (this->IsSpecObject()) {
-    std::map<Object*, Object*>::iterator it = debug_taint.find(this);
-    if (it != debug_taint.end()) {
-      ASSERT(Tainted::cast(it->second)->tainted_object() == this);
-      return it->second;
-    }
-  }
+  if (this->IsTainted())
+    return this;
 
-  return NULL;
+  if (!this->IsJSObject())
+    return NULL;
+  
+  return JSObject::cast(this)->tainted();
 }
 
 
@@ -915,10 +907,11 @@ MaybeObject* Object::TaintReference() {
   return result;
 }
 
-static int cc = 0;
+
 MaybeObject* Object::TaintObject() {
   ASSERT(!this->IsTainted());
-  ASSERT(this->IsSpecObject());
+  ASSERT(this->IsJSObject());
+  ASSERT(JSObject::cast(this)->tainted() == NULL);
 
   /* Never taint functions */
   if (HeapObject::cast(this)->map()->instance_type() == JS_FUNCTION_TYPE) {
@@ -952,6 +945,7 @@ MaybeObject* Object::TaintObject() {
 
   Address clone_address = HeapObject::cast(clone)->address();
   heap->CopyBlock(clone_address, heap_obj->address(), size);
+  JSObject::cast(clone)->set_tainted(this);
   // Update write barrier for all fields that lie beyond the header.
   heap->RecordWrites(clone_address, Object::kHeaderSize,
                      (size - Object::kHeaderSize) / kPointerSize);
@@ -978,18 +972,9 @@ MaybeObject* Object::TaintObject() {
   }
 
   // CLEAN(petr):
-  printf("Tainting object %s %p clone %p space %d %d\n", this->IsHeapObject() ?
+  printf("Tainting object %s %p clone %p space %d\n", this->IsHeapObject() ?
          TypeToString(HeapObject::cast(this)->map()->instance_type()) : "smi",
-         (void*) this, (void*)clone, space, cc++);
-
-  // CLEAN(petr): fix the map-cache used by tainted objects
-  std::map<Object*, Object*>::iterator it = debug_taint.find(this);
-  if (it != debug_taint.end()) {
-    this->Print(); printf("\n");
-    printf("o %p t %p\n", (void*)clone, (void*)this);
-    ASSERT(it == debug_taint.end());
-  }
-  debug_taint.insert(std::pair<Object*, Object*>(clone, this));
+         (void*) this, (void*)clone, space);
 
   return self;
 }
@@ -1018,14 +1003,13 @@ Object* Object::UntaintReference() {
 
 MaybeObject* Object::UntaintObject() {
   ASSERT(this->IsTainted());
+
   Tainted* tainted = Tainted::cast(this);
   Object* object = tainted->tainted_object();
-  ASSERT(object->IsSpecObject());
+  ASSERT(object->IsJSObject());
+  ASSERT(JSObject::cast(object)->tainted() != NULL);
 
-  std::map<Object*, Object*>::iterator it = debug_taint.find(object);
-  ASSERT(it != debug_taint.end());
-  debug_taint.erase(it);
-  printf("Untainting %p\n", (void*)this);
+  JSObject::cast(object)->set_tainted(Smi::FromInt(0));
 
   HeapObject* heap_obj = HeapObject::cast(object);
   Heap* heap = heap_obj->GetHeap();
@@ -1060,8 +1044,6 @@ MaybeObject* Object::UntaintObject() {
 MaybeObject* Object::Untaint() {
   ASSERT(this->IsTainted());
   Object* object = Tainted::cast(this)->tainted_object();
-  // CLEAN(petr)
-//  printf("Untainting %p\n", (void*)this);
 
   // NOTE(petr): Tainted object continue live on the heap,
   // and supposed to be freed by garbage collector
