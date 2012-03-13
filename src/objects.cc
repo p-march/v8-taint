@@ -975,6 +975,12 @@ MaybeObject* Object::TaintObject() {
   printf("Tainting object %s %p clone %p space %d\n", this->IsHeapObject() ?
          TypeToString(HeapObject::cast(this)->map()->instance_type()) : "smi",
          (void*) this, (void*)clone, space);
+#if 0
+  Object* constructor_name =
+            JSFunction::cast(JSObject::cast(clone)->map()->constructor())->shared()->name();
+  constructor_name->ShortPrint(); printf("\n");
+  ASSERT(!String::cast(constructor_name)->Equals(*heap->isolate()->factory()->LookupAsciiSymbol("HTMLDocument")));
+#endif
 
   return self;
 }

@@ -1870,10 +1870,11 @@ RUNTIME_FUNCTION(MaybeObject*, LoadIC_Miss) {
   LoadIC ic(isolate);
   IC::State state = IC::StateFrom(ic.target(), args[0], args[1]);
   MaybeObject* result = ic.Load(state, args.at<Object>(0), args.at<String>(1));
-  // NOTE(petr): we do not taint functions
-  if (!result->IsFailure() && result->ToObjectUnchecked()->IsJSFunction())
-    return result;
-  TAINT_RETURN(result);
+  // NOTE(petr): if we do TAINT_RETURN here, taint propagation is enabled
+  // and decisions made by taint policy enigne are discarded
+  // TAINT_RETURN(result);
+  return result;
+
 }
 
 
