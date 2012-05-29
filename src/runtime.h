@@ -393,7 +393,8 @@ namespace internal {
   F(TaintPolicyIsEnabled, 0, 1) \
   F(ContextPrint, 0, 0) \
   F(GetTaintedObject, 1, 1) \
-  F(Untaint, 1, 1)
+  F(Untaint, 1, 1) \
+  F(Untaintable, 1, 1)
 
 
 #ifdef ENABLE_DEBUGGER_SUPPORT

@@ -1193,8 +1193,10 @@ MUST_USE_RESULT static MaybeObject* HandleApiCallHelper(
 template <bool is_construct>
 MUST_USE_RESULT static MaybeObject* HandleApiCallHelperTaintCheck(
     BuiltinArguments<NEEDS_CALLED_FUNCTION> args, Isolate* isolate) {
-  if (!isolate->context()->TaintPolicyIsEnabled())
+  if (!isolate->context()->TaintPolicyIsEnabled()) {
+    TaintPolicy::UntaintArguments(args);
     return HandleApiCallHelper<is_construct>(args, isolate);
+  }
   
   HandleScope scope(isolate);
   MaybeObject* result;
@@ -1317,8 +1319,10 @@ MaybeObject* FastHandleApiCallInternal(FastHandleApiCallArgumentsType args,
 
 MaybeObject* FastHandleApiCallTaintCheck(FastHandleApiCallArgumentsType args,
                                          Isolate* isolate) {
-  if (!isolate->context()->TaintPolicyIsEnabled())
+  if (!isolate->context()->TaintPolicyIsEnabled()) {
+    TaintPolicy::UntaintArguments(args);
     return FastHandleApiCallInternal(args, isolate);
+  }
   
   HandleScope scope(isolate);
   MaybeObject* result;
@@ -1442,10 +1446,12 @@ static MaybeObject* HandleApiCallAsFunctionOrConstructorTaintCheck(
     Isolate* isolate,
     bool is_construct_call,
     BuiltinArguments<NO_EXTRA_ARGUMENTS> args) {
-  if (!isolate->context()->TaintPolicyIsEnabled())
+  if (!isolate->context()->TaintPolicyIsEnabled()) {
+    TaintPolicy::UntaintArguments(args);
     return HandleApiCallAsFunctionOrConstructor(isolate,
                                                 is_construct_call,
                                                 args);
+  }
 
   HandleScope scope(isolate);
   MaybeObject* result;

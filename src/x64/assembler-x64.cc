@@ -1596,6 +1596,9 @@ void Assembler::movq(Register dst, Handle<Object> value, RelocInfo::Mode mode) {
   } else {
     EnsureSpace ensure_space(this);
     ASSERT(value->IsHeapObject());
+    if (HEAP->InNewSpace(*value)) {
+      (*value)->Print(); printf("\n");
+    }
     ASSERT(!HEAP->InNewSpace(*value));
     emit_rex_64(dst);
     emit(0xB8 | dst.low_bits());

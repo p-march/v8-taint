@@ -670,7 +670,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_CreateJSFunctionProxy) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_IsJSProxy) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   ASSERT(args.length() == 1);
   Object* obj = args[0];
   return isolate->heap()->ToBoolean(obj->IsJSProxy());
@@ -1176,7 +1176,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_IsExtensible) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_RegExpCompile) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   HandleScope scope(isolate);
   ASSERT(args.length() == 3);
   CONVERT_ARG_CHECKED(JSRegExp, re, 0);
@@ -1184,7 +1184,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_RegExpCompile) {
   CONVERT_ARG_CHECKED(String, flags, 2);
   Handle<Object> result = RegExpImpl::Compile(re, pattern, flags);
   if (result.is_null()) return Failure::Exception();
-  return *result;
+  TAINT_RETURN(*result);
 }
 
 
@@ -1734,8 +1734,6 @@ RUNTIME_FUNCTION(MaybeObject*,
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_RegExpExec) {
-  // NOTE(petr): maybe a call to policy engine is required to decide weather to
-  // allow execution of tainted regular expression 
   UNTAINT_ALL_ARGS();
   HandleScope scope(isolate);
   ASSERT(args.length() == 4);
@@ -1798,7 +1796,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_RegExpConstructResult) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_RegExpInitializeObject) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   AssertNoAllocation no_alloc;
   ASSERT(args.length() == 5);
   CONVERT_CHECKED(JSRegExp, regexp, args[0]);
@@ -1863,7 +1861,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_RegExpInitializeObject) {
                                                writable);
   ASSERT(!result->IsFailure());
   USE(result);
-  return regexp;
+  TAINT_RETURN(regexp);
 }
 
 
@@ -3413,7 +3411,7 @@ static int StringMatchBackwards(Vector<const schar> subject,
 }
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_StringLastIndexOf) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   HandleScope scope(isolate);  // create a new handle scope
   ASSERT(args.length() == 3);
 
@@ -3432,7 +3430,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_StringLastIndexOf) {
   }
 
   if (pat_length == 0) {
-    return Smi::FromInt(start_index);
+    TAINT_RETURN(Smi::FromInt(start_index));
   }
 
   if (!sub->IsFlat()) FlattenString(sub);
@@ -3468,12 +3466,12 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_StringLastIndexOf) {
     }
   }
 
-  return Smi::FromInt(position);
+  TAINT_RETURN(Smi::FromInt(position));
 }
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_StringLocaleCompare) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   ASSERT(args.length() == 2);
 
@@ -3943,7 +3941,7 @@ static RegExpImpl::IrregexpResult SearchRegExpMultiple(
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_RegExpExecMultiple) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   ASSERT(args.length() == 4);
   HandleScope handles(isolate);
 
@@ -3971,7 +3969,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_RegExpExecMultiple) {
     ASSERT(pattern->IsFlat());
     if (SearchStringMultiple(isolate, subject, pattern,
                              last_match_info, &builder)) {
-      return *builder.ToJSArray(result_array);
+      TAINT_RETURN(*builder.ToJSArray(result_array));
     }
     return isolate->heap()->null_value();
   }
@@ -3992,7 +3990,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_RegExpExecMultiple) {
                                   last_match_info,
                                   &builder);
   }
-  if (result == RegExpImpl::RE_SUCCESS) return *builder.ToJSArray(result_array);
+  if (result == RegExpImpl::RE_SUCCESS) TAINT_RETURN(*builder.ToJSArray(result_array));
   if (result == RegExpImpl::RE_FAILURE) return isolate->heap()->null_value();
   ASSERT_EQ(result, RegExpImpl::RE_EXCEPTION);
   return Failure::Exception();
@@ -4000,7 +3998,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_RegExpExecMultiple) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_NumberToRadixString) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   ASSERT(args.length() == 2);
   CONVERT_SMI_ARG_CHECKED(radix, 1);
@@ -4012,27 +4010,27 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_NumberToRadixString) {
     if (value >= 0 && value < radix) {
       // Character array used for conversion.
       static const char kCharTable[] = "0123456789abcdefghijklmnopqrstuvwxyz";
-      return isolate->heap()->
-          LookupSingleCharacterStringFromCode(kCharTable[value]);
+      TAINT_RETURN(isolate->heap()->
+                   LookupSingleCharacterStringFromCode(kCharTable[value]));
     }
   }
 
   // Slow case.
   CONVERT_DOUBLE_ARG_CHECKED(value, 0);
   if (isnan(value)) {
-    return *isolate->factory()->nan_symbol();
+    TAINT_RETURN(*isolate->factory()->nan_symbol());
   }
   if (isinf(value)) {
     if (value < 0) {
-      return *isolate->factory()->minus_infinity_symbol();
+      TAINT_RETURN(*isolate->factory()->minus_infinity_symbol());
     }
-    return *isolate->factory()->infinity_symbol();
+    TAINT_RETURN(*isolate->factory()->infinity_symbol());
   }
   char* str = DoubleToRadixCString(value, radix);
   MaybeObject* result =
       isolate->heap()->AllocateStringFromAscii(CStrVector(str));
   DeleteArray(str);
-  return result;
+  TAINT_RETURN(result);
 }
 
 
@@ -4252,9 +4250,9 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_KeyedGetProperty) {
         int offset = keyed_lookup_cache->Lookup(receiver_map, key);
         if (offset != -1) {
           Object* value = receiver->FastPropertyAt(offset);
-          return value->IsTheHole()
+          TAINT_RETURN(value->IsTheHole()
               ? isolate->heap()->undefined_value()
-              : value;
+              : value);
         }
         // Lookup cache miss.  Perform lookup and update the cache if
         // appropriate.
@@ -4263,7 +4261,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_KeyedGetProperty) {
         if (result.IsProperty() && result.type() == FIELD) {
           int offset = result.GetFieldIndex();
           keyed_lookup_cache->Update(receiver_map, key, offset);
-          return receiver->FastPropertyAt(offset);
+          TAINT_RETURN(receiver->FastPropertyAt(offset));
         }
       } else {
         // Attempt dictionary lookup.
@@ -4272,9 +4270,9 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_KeyedGetProperty) {
         if ((entry != StringDictionary::kNotFound) &&
             (dictionary->DetailsAt(entry).type() == NORMAL)) {
           Object* value = dictionary->ValueAt(entry);
-          if (!receiver->IsGlobalObject()) return value;
+          if (!receiver->IsGlobalObject()) TAINT_RETURN(value);
           value = JSGlobalPropertyCell::cast(value)->value();
-          if (!value->IsTheHole()) return value;
+          if (!value->IsTheHole()) TAINT_RETURN(value);
           // If value is the hole do the general lookup.
         }
       }
@@ -4305,14 +4303,14 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_KeyedGetProperty) {
     int index = args.smi_at(1);
     if (index >= 0 && index < str->length()) {
       Handle<Object> result = GetCharAt(str, index);
-      return *result;
+      TAINT_RETURN(*result);
     }
   }
 
   // Fall back to GetObjectProperty.
-  return Runtime::GetObjectProperty(isolate,
+  TAINT_RETURN(Runtime::GetObjectProperty(isolate,
                                     args.at<Object>(0),
-                                    args.at<Object>(1));
+                                    args.at<Object>(1)));
 }
 
 // Implements part of 8.12.9 DefineOwnProperty.
@@ -4765,7 +4763,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_StoreArrayLiteralElement) {
 // Set a local property, even if it is READ_ONLY.  If the property does not
 // exist, it will be added with attributes NONE.
 RUNTIME_FUNCTION(MaybeObject*, Runtime_IgnoreAttributesAndSetProperty) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   RUNTIME_ASSERT(args.length() == 3 || args.length() == 4);
   CONVERT_CHECKED(JSObject, object, args[0]);
@@ -4781,22 +4779,22 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_IgnoreAttributesAndSetProperty) {
     attributes = static_cast<PropertyAttributes>(unchecked_value);
   }
 
-  return object->
+  object->
       SetLocalPropertyIgnoreAttributes(name, args[2], attributes);
 }
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_DeleteProperty) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   ASSERT(args.length() == 3);
 
   CONVERT_CHECKED(JSReceiver, object, args[0]);
   CONVERT_CHECKED(String, key, args[1]);
   CONVERT_STRICT_MODE_ARG(strict_mode, 2);
-  return object->DeleteProperty(key, (strict_mode == kStrictMode)
-                                      ? JSReceiver::STRICT_DELETION
-                                      : JSReceiver::NORMAL_DELETION);
+  TAINT_RETURN(object->DeleteProperty(key, (strict_mode == kStrictMode)
+                                            ? JSReceiver::STRICT_DELETION
+                                            : JSReceiver::NORMAL_DELETION));
 }
 
 
@@ -4968,7 +4966,9 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_GetPropertyNamesFast) {
   // Test again, since cache may have been built by preceding call.
   if (object->IsSimpleEnum()) return object->map();
 
-  TAINT_RETURN(*content);
+  // NOTE(petr): we do not do TAINT_RETURN here as the return value
+  // is an array of property names
+  return *content;
 }
 
 
@@ -5493,7 +5493,7 @@ static bool IsNotEscaped(uint16_t character) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_URIEscape) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   const char hex_chars[] = "0123456789ABCDEF";
   NoHandleAllocation ha;
   ASSERT(args.length() == 1);
@@ -5526,7 +5526,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_URIEscape) {
   }
   // No length change implies no change.  Return original string if no change.
   if (escaped_length == length) {
-    return source;
+    TAINT_RETURN(source);
   }
   Object* o;
   { MaybeObject* maybe_o =
@@ -5559,7 +5559,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_URIEscape) {
       dest_position += 3;
     }
   }
-  return destination;
+  TAINT_RETURN(destination);
 }
 
 
@@ -5613,7 +5613,7 @@ static inline int Unescape(String* source,
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_URIUnescape) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   ASSERT(args.length() == 1);
   CONVERT_CHECKED(String, source, args[0]);
@@ -5634,7 +5634,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_URIUnescape) {
 
   // No length change implies no change.  Return original string if no change.
   if (unescaped_length == length)
-    return source;
+    TAINT_RETURN(source);
 
   Object* o;
   { MaybeObject* maybe_o =
@@ -5651,7 +5651,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_URIUnescape) {
     destination->Set(dest_position, Unescape(source, i, length, &step));
     i += step;
   }
-  return destination;
+  TAINT_RETURN(destination);
 }
 
 
@@ -5899,7 +5899,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_QuoteJSONString) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_QuoteJSONStringComma) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   CONVERT_CHECKED(String, str, args[0]);
   if (!str->IsFlat()) {
@@ -5913,11 +5913,11 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_QuoteJSONStringComma) {
   }
   String::FlatContent flat = str->GetFlatContent();
   if (flat.IsTwoByte()) {
-    return QuoteJsonString<uc16, SeqTwoByteString, true>(isolate,
-                                                         flat.ToUC16Vector());
+    TAINT_RETURN((QuoteJsonString<uc16, SeqTwoByteString, true>(isolate,
+                                                        flat.ToUC16Vector())));
   } else {
-    return QuoteJsonString<char, SeqAsciiString, true>(isolate,
-                                                       flat.ToAsciiVector());
+    TAINT_RETURN((QuoteJsonString<char, SeqAsciiString, true>(isolate,
+                                                       flat.ToAsciiVector())));
   }
 }
 
@@ -6019,7 +6019,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_QuoteJSONStringArray) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_StringParseInt) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
 
   CONVERT_CHECKED(String, s, args[0]);
@@ -6029,12 +6029,12 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_StringParseInt) {
 
   RUNTIME_ASSERT(radix == 0 || (2 <= radix && radix <= 36));
   double value = StringToInt(isolate->unicode_cache(), s, radix);
-  return isolate->heap()->NumberFromDouble(value);
+  TAINT_RETURN(isolate->heap()->NumberFromDouble(value));
 }
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_StringParseFloat) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   CONVERT_CHECKED(String, str, args[0]);
 
@@ -6043,7 +6043,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_StringParseFloat) {
                                 str, ALLOW_TRAILING_JUNK, OS::nan_value());
 
   // Create a number object from the value.
-  return isolate->heap()->NumberFromDouble(value);
+  TAINT_RETURN(isolate->heap()->NumberFromDouble(value));
 }
 
 
@@ -6346,7 +6346,7 @@ static inline bool IsTrimWhiteSpace(unibrow::uchar c) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_StringTrim) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   ASSERT(args.length() == 3);
 
@@ -6370,7 +6370,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_StringTrim) {
       right--;
     }
   }
-  return s->SubString(left, right);
+  TAINT_RETURN(s->SubString(left, right));
 }
 
 
@@ -6605,7 +6605,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_NumberToInteger) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_NumberToIntegerMapMinusZero) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   ASSERT(args.length() == 1);
 
@@ -6613,14 +6613,14 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_NumberToIntegerMapMinusZero) {
 
   // We do not include 0 so that we don't have to treat +0 / -0 cases.
   if (number > 0 && number <= Smi::kMaxValue) {
-    return Smi::FromInt(static_cast<int>(number));
+    TAINT_RETURN(Smi::FromInt(static_cast<int>(number)));
   }
 
   double double_value = DoubleToInteger(number);
   // Map both -0 and +0 to +0.
   if (double_value == 0) double_value = 0;
 
-  return isolate->heap()->NumberFromDouble(double_value);
+  TAINT_RETURN(isolate->heap()->NumberFromDouble(double_value));
 }
 
 
@@ -6635,7 +6635,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_NumberToJSUint32) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_NumberToJSInt32) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   ASSERT(args.length() == 1);
 
@@ -6643,9 +6643,9 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_NumberToJSInt32) {
 
   // We do not include 0 so that we don't have to treat +0 / -0 cases.
   if (number > 0 && number <= Smi::kMaxValue) {
-    return Smi::FromInt(static_cast<int>(number));
+    TAINT_RETURN(Smi::FromInt(static_cast<int>(number)));
   }
-  return isolate->heap()->NumberFromInt32(DoubleToInt32(number));
+  TAINT_RETURN(isolate->heap()->NumberFromInt32(DoubleToInt32(number)));
 }
 
 
@@ -7466,35 +7466,35 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_StringCompare) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_Math_acos) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   ASSERT(args.length() == 1);
   isolate->counters()->math_acos()->Increment();
 
   CONVERT_DOUBLE_ARG_CHECKED(x, 0);
-  return isolate->transcendental_cache()->Get(TranscendentalCache::ACOS, x);
+  TAINT_RETURN(isolate->transcendental_cache()->Get(TranscendentalCache::ACOS, x));
 }
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_Math_asin) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   ASSERT(args.length() == 1);
   isolate->counters()->math_asin()->Increment();
 
   CONVERT_DOUBLE_ARG_CHECKED(x, 0);
-  return isolate->transcendental_cache()->Get(TranscendentalCache::ASIN, x);
+  TAINT_RETURN(isolate->transcendental_cache()->Get(TranscendentalCache::ASIN, x));
 }
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_Math_atan) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   ASSERT(args.length() == 1);
   isolate->counters()->math_atan()->Increment();
 
   CONVERT_DOUBLE_ARG_CHECKED(x, 0);
-  return isolate->transcendental_cache()->Get(TranscendentalCache::ATAN, x);
+  TAINT_RETURN(isolate->transcendental_cache()->Get(TranscendentalCache::ATAN, x));
 }
 
 
@@ -7502,7 +7502,7 @@ static const double kPiDividedBy4 = 0.78539816339744830962;
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_Math_atan2) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   ASSERT(args.length() == 2);
   isolate->counters()->math_atan2()->Increment();
@@ -7521,67 +7521,67 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_Math_atan2) {
   } else {
     result = atan2(x, y);
   }
-  return isolate->heap()->AllocateHeapNumber(result);
+  TAINT_RETURN(isolate->heap()->AllocateHeapNumber(result));
 }
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_Math_ceil) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   ASSERT(args.length() == 1);
   isolate->counters()->math_ceil()->Increment();
 
   CONVERT_DOUBLE_ARG_CHECKED(x, 0);
-  return isolate->heap()->NumberFromDouble(ceiling(x));
+  TAINT_RETURN(isolate->heap()->NumberFromDouble(ceiling(x)));
 }
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_Math_cos) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   ASSERT(args.length() == 1);
   isolate->counters()->math_cos()->Increment();
 
   CONVERT_DOUBLE_ARG_CHECKED(x, 0);
-  return isolate->transcendental_cache()->Get(TranscendentalCache::COS, x);
+  TAINT_RETURN(isolate->transcendental_cache()->Get(TranscendentalCache::COS, x));
 }
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_Math_exp) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   ASSERT(args.length() == 1);
   isolate->counters()->math_exp()->Increment();
 
   CONVERT_DOUBLE_ARG_CHECKED(x, 0);
-  return isolate->transcendental_cache()->Get(TranscendentalCache::EXP, x);
+  TAINT_RETURN(isolate->transcendental_cache()->Get(TranscendentalCache::EXP, x));
 }
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_Math_floor) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   ASSERT(args.length() == 1);
   isolate->counters()->math_floor()->Increment();
 
   CONVERT_DOUBLE_ARG_CHECKED(x, 0);
-  return isolate->heap()->NumberFromDouble(floor(x));
+  TAINT_RETURN(isolate->heap()->NumberFromDouble(floor(x)));
 }
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_Math_log) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   ASSERT(args.length() == 1);
   isolate->counters()->math_log()->Increment();
 
   CONVERT_DOUBLE_ARG_CHECKED(x, 0);
-  return isolate->transcendental_cache()->Get(TranscendentalCache::LOG, x);
+  TAINT_RETURN(isolate->transcendental_cache()->Get(TranscendentalCache::LOG, x));
 }
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_Math_pow) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   ASSERT(args.length() == 2);
   isolate->counters()->math_pow()->Increment();
@@ -7592,36 +7592,36 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_Math_pow) {
   // custom powi() function than the generic pow().
   if (args[1]->IsSmi()) {
     int y = args.smi_at(1);
-    return isolate->heap()->NumberFromDouble(power_double_int(x, y));
+    TAINT_RETURN(isolate->heap()->NumberFromDouble(power_double_int(x, y)));
   }
 
   CONVERT_DOUBLE_ARG_CHECKED(y, 1);
   // Returning a smi would not confuse crankshaft as this part of code is only
   // run if SSE2 was not available, in which case crankshaft is disabled.
-  if (y == 0) return Smi::FromInt(1);  // Returns 1 if exponent is 0.
-  return isolate->heap()->AllocateHeapNumber(power_double_double(x, y));
+  if (y == 0) TAINT_RETURN(Smi::FromInt(1));  // Returns 1 if exponent is 0.
+  TAINT_RETURN(isolate->heap()->AllocateHeapNumber(power_double_double(x, y)));
 }
 
 // Fast version of Math.pow if we know that y is not an integer and
 // y is not -0.5 or 0.5. Used as slowcase from codegen.
 RUNTIME_FUNCTION(MaybeObject*, Runtime_Math_pow_cfunction) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   ASSERT(args.length() == 2);
   CONVERT_DOUBLE_ARG_CHECKED(x, 0);
   CONVERT_DOUBLE_ARG_CHECKED(y, 1);
   if (y == 0) {
-    return Smi::FromInt(1);
+    TAINT_RETURN(Smi::FromInt(1));
   } else if (isnan(y) || ((x == 1 || x == -1) && isinf(y))) {
-    return isolate->heap()->nan_value();
+    TAINT_RETURN(isolate->heap()->nan_value());
   } else {
-    return isolate->heap()->AllocateHeapNumber(pow(x, y));
+    TAINT_RETURN(isolate->heap()->AllocateHeapNumber(pow(x, y)));
   }
 }
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_RoundNumber) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   ASSERT(args.length() == 1);
   isolate->counters()->math_round()->Increment();
@@ -7629,7 +7629,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_RoundNumber) {
   if (!args[0]->IsHeapNumber()) {
     // Must be smi. Return the argument unchanged for all the other types
     // to make fuzz-natives test happy.
-    return args[0];
+    TAINT_RETURN(args[0]);
   }
 
   HeapNumber* number = reinterpret_cast<HeapNumber*>(args[0]);
@@ -7641,59 +7641,59 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_RoundNumber) {
   if (exponent < -1) {
     // Number in range ]-0.5..0.5[. These always round to +/-zero.
     if (sign) return isolate->heap()->minus_zero_value();
-    return Smi::FromInt(0);
+    TAINT_RETURN(Smi::FromInt(0));
   }
 
   // We compare with kSmiValueSize - 2 because (2^30 - 0.1) has exponent 29 and
   // should be rounded to 2^30, which is not smi (for 31-bit smis, similar
   // agument holds for 32-bit smis).
   if (!sign && exponent < kSmiValueSize - 2) {
-    return Smi::FromInt(static_cast<int>(value + 0.5));
+    TAINT_RETURN(Smi::FromInt(static_cast<int>(value + 0.5)));
   }
 
   // If the magnitude is big enough, there's no place for fraction part. If we
   // try to add 0.5 to this number, 1.0 will be added instead.
   if (exponent >= 52) {
-    return number;
+    TAINT_RETURN(number);
   }
 
   if (sign && value >= -0.5) return isolate->heap()->minus_zero_value();
 
   // Do not call NumberFromDouble() to avoid extra checks.
-  return isolate->heap()->AllocateHeapNumber(floor(value + 0.5));
+  TAINT_RETURN(isolate->heap()->AllocateHeapNumber(floor(value + 0.5)));
 }
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_Math_sin) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   ASSERT(args.length() == 1);
   isolate->counters()->math_sin()->Increment();
 
   CONVERT_DOUBLE_ARG_CHECKED(x, 0);
-  return isolate->transcendental_cache()->Get(TranscendentalCache::SIN, x);
+  TAINT_RETURN(isolate->transcendental_cache()->Get(TranscendentalCache::SIN, x));
 }
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_Math_sqrt) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   ASSERT(args.length() == 1);
   isolate->counters()->math_sqrt()->Increment();
 
   CONVERT_DOUBLE_ARG_CHECKED(x, 0);
-  return isolate->heap()->AllocateHeapNumber(sqrt(x));
+  TAINT_RETURN(isolate->heap()->AllocateHeapNumber(sqrt(x)));
 }
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_Math_tan) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   ASSERT(args.length() == 1);
   isolate->counters()->math_tan()->Increment();
 
   CONVERT_DOUBLE_ARG_CHECKED(x, 0);
-  return isolate->transcendental_cache()->Get(TranscendentalCache::TAN, x);
+  TAINT_RETURN(isolate->transcendental_cache()->Get(TranscendentalCache::TAN, x));
 }
 
 
@@ -7743,14 +7743,14 @@ static int MakeDay(int year, int month) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_DateMakeDay) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   ASSERT(args.length() == 2);
 
   CONVERT_SMI_ARG_CHECKED(year, 0);
   CONVERT_SMI_ARG_CHECKED(month, 1);
 
-  return Smi::FromInt(MakeDay(year, month));
+  TAINT_RETURN(Smi::FromInt(MakeDay(year, month)));
 }
 
 
@@ -8042,7 +8042,7 @@ static inline void DateYMDFromTime(int date,
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_DateYMDFromTime) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   ASSERT(args.length() == 2);
 
@@ -8063,7 +8063,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_DateYMDFromTime) {
   elms->set(1, Smi::FromInt(month));
   elms->set(2, Smi::FromInt(day));
 
-  return isolate->heap()->undefined_value();
+  TAINT_RETURN(isolate->heap()->undefined_value());
 }
 
 
@@ -8975,7 +8975,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_NewFunctionContext) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_PushWithContext) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   ASSERT(args.length() == 2);
   JSObject* extension_object;
@@ -9507,7 +9507,6 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_DebugTrace) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_DateCurrentTime) {
-  ASSERT_IF_TAINTED_ARGS();
   NoHandleAllocation ha;
   ASSERT(args.length() == 0);
 
@@ -9521,7 +9520,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_DateCurrentTime) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_DateParseString) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   HandleScope scope(isolate);
   ASSERT(args.length() == 2);
 
@@ -9553,7 +9552,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_DateParseString) {
   }
 
   if (result) {
-    return *output;
+    TAINT_RETURN(*output);
   } else {
     return isolate->heap()->null_value();
   }
@@ -9561,32 +9560,32 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_DateParseString) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_DateLocalTimezone) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   ASSERT(args.length() == 1);
 
   CONVERT_DOUBLE_ARG_CHECKED(x, 0);
   const char* zone = OS::LocalTimezone(x);
-  return isolate->heap()->AllocateStringFromUtf8(CStrVector(zone));
+  TAINT_RETURN(isolate->heap()->AllocateStringFromUtf8(CStrVector(zone)));
 }
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_DateLocalTimeOffset) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   ASSERT(args.length() == 0);
 
-  return isolate->heap()->NumberFromDouble(OS::LocalTimeOffset());
+  TAINT_RETURN(isolate->heap()->NumberFromDouble(OS::LocalTimeOffset()));
 }
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_DateDaylightSavingsOffset) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   ASSERT(args.length() == 1);
 
   CONVERT_DOUBLE_ARG_CHECKED(x, 0);
-  return isolate->heap()->NumberFromDouble(OS::DaylightSavingsOffset(x));
+  TAINT_RETURN(isolate->heap()->NumberFromDouble(OS::DaylightSavingsOffset(x)));
 }
 
 
@@ -9600,7 +9599,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_GlobalReceiver) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_ParseJson) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   HandleScope scope(isolate);
   ASSERT_EQ(1, args.length());
   CONVERT_ARG_CHECKED(String, source, 0);
@@ -9618,7 +9617,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_ParseJson) {
     ASSERT(isolate->has_pending_exception());
     return Failure::Exception();
   }
-  return *result;
+  TAINT_RETURN(*result);
 }
 
 
@@ -9642,7 +9641,7 @@ bool CodeGenerationFromStringsAllowed(Isolate* isolate,
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_CompileString) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   HandleScope scope(isolate);
   ASSERT_EQ(1, args.length());
   CONVERT_ARG_CHECKED(String, source, 0);
@@ -10426,7 +10425,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_MoveArrayContents) {
 
 // How many elements does this object/array have?
 RUNTIME_FUNCTION(MaybeObject*, Runtime_EstimateNumberOfElements) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   ASSERT(args.length() == 1);
   CONVERT_CHECKED(JSObject, object, args[0]);
   HeapObject* elements = object->elements();
@@ -10546,7 +10545,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_DefineAccessor) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_LookupAccessor) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   ASSERT(args.length() == 3);
   CONVERT_CHECKED(JSObject, obj, args[0]);
   CONVERT_CHECKED(String, name, args[1]);
@@ -14071,6 +14070,34 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_DeepUntaint) {
   Object* object = args[0];
 
   return DeepUntaint(isolate, object);
+}
+
+
+RUNTIME_FUNCTION(MaybeObject*, Runtime_Untaintable) {
+  ASSERT(FLAG_taint_policy);
+  HandleScope scope(isolate);
+  ASSERT(args.length() == 1);
+  Object* object = args[0];
+
+  if (object->IsTainted()) {
+    Handle<Object> err_args[1] = { Handle<Object>(object) };
+    Handle<Object> error =
+      isolate->factory()->NewTypeError("object is tainted",
+                                       HandleVector(err_args, 1));
+    return isolate->Throw(*error);
+  }
+
+  if (!object->IsJSObject()) {
+    Handle<Object> err_args[1] = { Handle<Object>(object) };
+    Handle<Object> error =
+      isolate->factory()->NewTypeError("object is not JSObject",
+                                       HandleVector(err_args, 1));
+    return isolate->Throw(*error);
+  }
+
+  object->Untaintable();
+
+  return object;
 }
 
 

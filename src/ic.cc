@@ -768,7 +768,9 @@ MaybeObject* KeyedCallIC::LoadFunction(State state,
 
 MaybeObject* LoadIC::Load(State state,
                           Handle<Object> object,
-                          Handle<String> name) {
+                          Handle<String> name,
+                          bool* taint_policy) {
+  *taint_policy = false;
   // If the object is undefined or null it's illegal to try to get any
   // of its properties; throw a TypeError in that case.
   if (object->IsUndefined() || object->IsNull()) {
@@ -874,6 +876,7 @@ MaybeObject* LoadIC::Load(State state,
   PropertyAttributes attr;
   if (lookup.IsProperty() &&
       (lookup.type() == INTERCEPTOR || lookup.type() == HANDLER)) {
+    *taint_policy = true;
     // Get the property.
     Handle<Object> result =
         Object::GetProperty(object, object, &lookup, name, &attr);
@@ -1013,7 +1016,9 @@ Handle<Code> KeyedLoadIC::ComputePolymorphicStub(
 MaybeObject* KeyedLoadIC::Load(State state,
                                Handle<Object> object,
                                Handle<Object> key,
-                               bool force_generic_stub) {
+                               bool force_generic_stub,
+                               bool* taint_policy) {
+  *taint_policy = false;
   // Check for values that can be converted into a symbol.
   // TODO(1295): Remove this code.
   if (key->IsHeapNumber() &&
@@ -1098,6 +1103,7 @@ MaybeObject* KeyedLoadIC::Load(State state,
 
     PropertyAttributes attr;
     if (lookup.IsProperty() && lookup.type() == INTERCEPTOR) {
+      *taint_policy = true;
       // Get the property.
       Handle<Object> result =
           Object::GetProperty(object, object, &lookup, name, &attr);
@@ -1815,11 +1821,6 @@ RUNTIME_FUNCTION(MaybeObject*, CallIC_Miss) {
   CallIC ic(isolate);
   IC::State state = IC::StateFrom(ic.target(), args[0], args[1]);
   Code::ExtraICState extra_ic_state = ic.target()->extra_ic_state();
-  // CLEAN(petr):
-  if(args[0]->IsTainted()) {
-    PRINT_ALL_ARGS();
-    ASSERT(!args[0]->IsTainted());
-  }
   MaybeObject* maybe_result = ic.LoadFunction(state,
                                               extra_ic_state,
                                               args.at<Object>(0),
@@ -1843,7 +1844,7 @@ RUNTIME_FUNCTION(MaybeObject*, CallIC_Miss) {
 
 // Used from ic-<arch>.cc.
 RUNTIME_FUNCTION(MaybeObject*, KeyedCallIC_Miss) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   HandleScope scope(isolate);
   ASSERT(args.length() == 2);
   KeyedCallIC ic(isolate);
@@ -1868,11 +1869,14 @@ RUNTIME_FUNCTION(MaybeObject*, LoadIC_Miss) {
   HandleScope scope(isolate);
   ASSERT(args.length() == 2);
   LoadIC ic(isolate);
+  bool taint_policy;
   IC::State state = IC::StateFrom(ic.target(), args[0], args[1]);
-  MaybeObject* result = ic.Load(state, args.at<Object>(0), args.at<String>(1));
+  MaybeObject* result = ic.Load(state, args.at<Object>(0), args.at<String>(1), &taint_policy);
   // NOTE(petr): if we do TAINT_RETURN here, taint propagation is enabled
   // and decisions made by taint policy enigne are discarded
-  // TAINT_RETURN(result);
+  if (!taint_policy) {
+    TAINT_RETURN(result);
+  }
   return result;
 
 }
@@ -1885,7 +1889,13 @@ RUNTIME_FUNCTION(MaybeObject*, KeyedLoadIC_Miss) {
   ASSERT(args.length() == 2);
   KeyedLoadIC ic(isolate);
   IC::State state = IC::StateFrom(ic.target(), args[0], args[1]);
-  return ic.Load(state, args.at<Object>(0), args.at<Object>(1), false);
+  bool taint_policy;
+  MaybeObject* result;
+  result = ic.Load(state, args.at<Object>(0), args.at<Object>(1), false, &taint_policy);
+  if (!taint_policy) {
+    TAINT_RETURN(result);
+  }
+  return result;
 }
 
 
@@ -1895,7 +1905,13 @@ RUNTIME_FUNCTION(MaybeObject*, KeyedLoadIC_MissForceGeneric) {
   ASSERT(args.length() == 2);
   KeyedLoadIC ic(isolate);
   IC::State state = IC::StateFrom(ic.target(), args[0], args[1]);
-  return ic.Load(state, args.at<Object>(0), args.at<Object>(1), true);
+  bool taint_policy;
+  MaybeObject* result;
+  result = ic.Load(state, args.at<Object>(0), args.at<Object>(1), true, &taint_policy);
+  if (!taint_policy) {
+    TAINT_RETURN(result);
+  }
+  return result;
 }
 
 

@@ -167,24 +167,24 @@ Type Name(Arguments args, Isolate* isolate)
 #define PRINT_ALL_ARGS()                                  \
   for (int i = 0; i < args.length(); i++) {               \
     printf("arg %d: ", i);                                \
+    if (args[i]->HasTaintedWrapper()) {                   \
+      printf("TW ");                                      \
+    }                                                     \
     args[i]->Print();                                     \
     printf("\n");                                         \
   }
 #define SHORTPRINT_ALL_ARGS()                             \
   for (int i = 0; i < args.length(); i++) {               \
     printf("arg %d: ", i);                                \
+    if (args[i]->HasTaintedWrapper()) {                   \
+      printf("TW ");                                      \
+    }                                                     \
     args[i]->ShortPrint();                                \
-    printf("\n");                                         \
-  }
-#define PRINT_ARGS(args)                                  \
-  for (int i = 0; i < args.length(); i++) {               \
-    printf("arg %d: ", i);                                \
-    args[i]->Print();                                     \
     printf("\n");                                         \
   }
 #else
 #define PRINT_ALL_ARGS() ((void) 0)
-#define PRINT_ARGS(args) ((void) 0)
+#define SHORTPRINT_ALL_ARGS(args) ((void) 0)
 #endif
 
 // CLEAN(petr):

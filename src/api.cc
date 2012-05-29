@@ -5112,7 +5112,7 @@ void V8::AddImplicitReferences(Persistent<Object> parent,
   if (IsDeadCheck(isolate, "v8::V8::AddImplicitReferences()")) return;
   STATIC_ASSERT(sizeof(Persistent<Value>) == sizeof(i::Object**));
   isolate->global_handles()->AddImplicitReferences(
-      i::Handle<i::HeapObject>::cast(Utils::OpenHandle(*parent)).location(),
+      i::Handle<i::HeapObject>::cast(Utils::OpenHandleNoTaint(*parent)).location(),
       reinterpret_cast<i::Object***>(children), length);
 }
 

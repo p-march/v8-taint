@@ -326,7 +326,8 @@ class LoadIC: public IC {
 
   MUST_USE_RESULT MaybeObject* Load(State state,
                                     Handle<Object> object,
-                                    Handle<String> name);
+                                    Handle<String> name,
+                                    bool* taint_policy);
 
   // Code generator routines.
   static void GenerateInitialize(MacroAssembler* masm) { GenerateMiss(masm); }
@@ -430,7 +431,8 @@ class KeyedLoadIC: public KeyedIC {
   MUST_USE_RESULT MaybeObject* Load(State state,
                                     Handle<Object> object,
                                     Handle<Object> key,
-                                    bool force_generic_stub);
+                                    bool force_generic_stub,
+                                    bool* taint_policy);
 
   // Code generator routines.
   static void GenerateMiss(MacroAssembler* masm, bool force_generic);

@@ -206,10 +206,14 @@ class Utils {
       OpenHandle(const ObjectTemplate* that);
   static inline v8::internal::Handle<v8::internal::Object>
       OpenHandle(const Data* data);
+  static inline v8::internal::Handle<v8::internal::Object>
+      OpenHandleNoTaint(const Data* data);
   static inline v8::internal::Handle<v8::internal::JSRegExp>
       OpenHandle(const RegExp* data);
   static inline v8::internal::Handle<v8::internal::JSObject>
       OpenHandle(const v8::Object* data);
+  static inline v8::internal::Handle<v8::internal::JSObject>
+      OpenHandleNoTaint(const v8::Object* data);
   static inline v8::internal::Handle<v8::internal::JSArray>
       OpenHandle(const v8::Array* data);
   static inline v8::internal::Handle<v8::internal::String>
@@ -291,14 +295,31 @@ MAKE_TO_LOCAL(Uint32ToLocal, Object, Uint32)
         reinterpret_cast<v8::internal::To**>(const_cast<v8::From*>(that))); \
   }
 
+#define MAKE_OPEN_HANDLE_WITH_TAINT(From, To) \
+  v8::internal::Handle<v8::internal::To> Utils::OpenHandle(\
+    const v8::From* that) { \
+    if (!that || !(*reinterpret_cast<v8::internal::Object**>(const_cast<v8::From*>(that)))->IsTainted()) { \
+      return v8::internal::Handle<v8::internal::To>( \
+          reinterpret_cast<v8::internal::To**>(const_cast<v8::From*>(that))); \
+    } \
+    return v8::internal::Handle<v8::internal::To>(reinterpret_cast<v8::internal::To**>( \
+          (*reinterpret_cast<v8::internal::byte**>(const_cast<From*>(that))) + \
+          v8::internal::Tainted::kObjectOffset - v8::internal::kHeapObjectTag)); \
+  } \
+  v8::internal::Handle<v8::internal::To> Utils::OpenHandleNoTaint(\
+    const v8::From* that) { \
+    return v8::internal::Handle<v8::internal::To>( \
+        reinterpret_cast<v8::internal::To**>(const_cast<v8::From*>(that))); \
+  }
+
 MAKE_OPEN_HANDLE(Template, TemplateInfo)
 MAKE_OPEN_HANDLE(FunctionTemplate, FunctionTemplateInfo)
 MAKE_OPEN_HANDLE(ObjectTemplate, ObjectTemplateInfo)
 MAKE_OPEN_HANDLE(Signature, SignatureInfo)
 MAKE_OPEN_HANDLE(TypeSwitch, TypeSwitchInfo)
-MAKE_OPEN_HANDLE(Data, Object)
+MAKE_OPEN_HANDLE_WITH_TAINT(Data, Object)
 MAKE_OPEN_HANDLE(RegExp, JSRegExp)
-MAKE_OPEN_HANDLE(Object, JSObject)
+MAKE_OPEN_HANDLE_WITH_TAINT(Object, JSObject)
 MAKE_OPEN_HANDLE(Array, JSArray)
 MAKE_OPEN_HANDLE(String, String)
 MAKE_OPEN_HANDLE(Script, Object)

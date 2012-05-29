@@ -1455,7 +1455,7 @@ LInstruction* LChunkBuilder::DoCompareConstantEqAndBranch(
 
 LInstruction* LChunkBuilder::DoIsNilAndBranch(HIsNilAndBranch* instr) {
   ASSERT(instr->value()->representation().IsTagged());
-  LOperand* temp = instr->kind() == kStrictEquality ? NULL : TempRegister();
+  LOperand* temp = instr->kind() == kStrictEquality && !FLAG_taint_policy ? NULL : TempRegister();
   return new LIsNilAndBranch(UseRegisterAtStart(instr->value()), temp);
 }
 

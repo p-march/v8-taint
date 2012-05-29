@@ -178,6 +178,14 @@ function JSONSerialize(key, holder, replacer, stack, indent, gap) {
 }
 
 
+function WrapIfTainted(str) {
+  if (%_IsTainted(str)) {
+    str = "T(" + str + ")";
+  }
+  return str;
+}
+
+
 function BasicSerializeArray(value, stack, builder) {
   var len = value.length;
   if (len == 0) {
@@ -198,11 +206,11 @@ function BasicSerializeArray(value, stack, builder) {
       stack.pop();
       return;
     } else {
-      builder.push(%QuoteJSONString(val));
+      builder.push(WrapIfTainted(%QuoteJSONString(val)));
       for (var i = 1; i < len; i++) {
         val = value[i];
         if (IS_STRING(val)) {
-          builder.push(%QuoteJSONStringComma(val));
+          builder.push("," + WrapIfTainted(%QuoteJSONString(val)));
         } else {
           builder.push(",");
           var before = builder.length;
@@ -213,12 +221,12 @@ function BasicSerializeArray(value, stack, builder) {
     }
   } else if (IS_NUMBER(val)) {
     // First entry is a number. Remaining entries are likely to be numbers too.
-    builder.push(JSON_NUMBER_TO_STRING(val));
+    builder.push(WrapIfTainted(JSON_NUMBER_TO_STRING(val)));
     for (var i = 1; i < len; i++) {
       builder.push(",");
       val = value[i];
       if (IS_NUMBER(val)) {
-        builder.push(JSON_NUMBER_TO_STRING(val));
+        builder.push(WrapIfTainted(JSON_NUMBER_TO_STRING(val)));
       } else {
         var before = builder.length;
         BasicJSONSerialize(i, val, stack, builder);
@@ -277,35 +285,34 @@ function BasicJSONSerialize(key, value, stack, builder) {
       value = %_CallFunction(value, ToString(key), toJSON);
     }
   }
-  var is_tainted = %_IsTainted(value);
   var result;
   if (IS_STRING(value)) {
     result = value !== "" ? %QuoteJSONString(value) : '""';
-    if (is_tainted && !%_IsTainted(result)) result = %Taint(result);
-    builder.push(is_tainted ? "T(" + result + ")" : result);
+    if (%_IsTainted(value) && !%_IsTainted(result)) result = %Taint(result);
+    builder.push(WrapIfTainted(result));
   } else if (IS_NUMBER(value)) {
     result = JSON_NUMBER_TO_STRING(value);
-    builder.push(is_tainted ? "T(" + result + ")" : result);
+    builder.push(WrapIfTainted(result));
   } else if (IS_BOOLEAN(value)) {
     result = value ? "true" : "false";
-    if (is_tainted && !%_IsTainted(result)) result = %Taint(result);
-    builder.push(is_tainted ? "T(" + result + ")" : result);
+    if (%_IsTainted(value) && !%_IsTainted(result)) result = %Taint(result);
+    builder.push(WrapIfTainted(result));
   } else if (IS_NULL(value)) {
-    builder.push(is_tainted ? %Taint("T(null)") : "null");
+    builder.push(%_IsTainted(value) ? %Taint("T(null)") : "null");
   } else if (IS_SPEC_OBJECT(value) && !(typeof value == "function")) {
     // Value is a non-callable object.
     // Unwrap value if necessary
     if (IS_NUMBER_WRAPPER(value)) {
       value = ToNumber(value);
       result = JSON_NUMBER_TO_STRING(value);
-      builder.push(is_tainted ? "T(" + result + ")" : result);
+      builder.push(WrapIfTainted(result));
     } else if (IS_STRING_WRAPPER(value)) {
       result = %QuoteJSONString(ToString(value));
-      builder.push(is_tainted ? "T(" + result + ")" : result);
+      builder.push(WrapIfTainted(result));
     } else if (IS_BOOLEAN_WRAPPER(value)) {
       result = %_ValueOf(value) ? "true" : "false";
-      if (is_tainted && !%_IsTainted(result)) result = %Taint(result);
-      builder.push(is_tainted ? "T(" + result + ")" : result);
+      if (%_IsTainted(value) && !%_IsTainted(result)) result = %Taint(result);
+      builder.push(WrapIfTainted(result));
     } else if (IS_ARRAY(value)) {
       BasicSerializeArray(value, stack, builder);
     } else {

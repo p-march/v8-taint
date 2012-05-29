@@ -955,7 +955,12 @@ class Object : public MaybeObject {
   Object* UntaintReference();
   MaybeObject* UntaintObject();
 
+  // Mark object as untaintable
+  void Untaintable();
+  void Taintable();
+
   Object* GetTaintedWrapper();
+  bool HasTaintedWrapper();
 
 #ifdef DEBUG
   // Verify a pointer is a valid object pointer.
@@ -1429,7 +1434,7 @@ class JSObject: public JSReceiver {
  public:
   // [tainted]: if the object is tainted, this field should containt a pointer
   // to a wrapper Tainted object
-  DECL_ACCESSORS(tainted, Object);
+  DECL_ACCESSORS(tainted, Object)
   inline void initialize_tainted();
 
   // [properties]: Backing storage for properties.
@@ -2018,10 +2023,10 @@ class JSObject: public JSReceiver {
   static const int kFieldsAdded = 3;
 
   // Layout description.
-  static const int kTaintedOffset = HeapObject::kHeaderSize;
-  static const int kPropertiesOffset = kTaintedOffset + kPointerSize;
+  static const int kPropertiesOffset = HeapObject::kHeaderSize;
   static const int kElementsOffset = kPropertiesOffset + kPointerSize;
-  static const int kHeaderSize = kElementsOffset + kPointerSize;
+  static const int kTaintedOffset = kElementsOffset + kPointerSize;
+  static const int kHeaderSize = kTaintedOffset + kPointerSize;
 
   STATIC_CHECK(kHeaderSize == Internals::kJSObjectHeaderSize);
 

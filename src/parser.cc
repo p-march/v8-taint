@@ -5622,6 +5622,9 @@ ScriptDataImpl* ParserApi::PreParse(UC16CharacterStream* source,
                                     v8::Extension* extension,
                                     int flags) {
   Handle<Script> no_script;
+  if (FLAG_allow_natives_syntax) {
+    flags |= kAllowNativesSyntax;
+  }
   if (FLAG_lazy && (extension == NULL)) {
     flags |= kAllowLazy;
   }

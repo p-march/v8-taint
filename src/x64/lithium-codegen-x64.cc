@@ -1346,10 +1346,6 @@ void LCodeGen::DoBranch(LBranch* instr) {
     Register reg = ToRegister(instr->InputAt(0));
     HType type = instr->hydrogen()->value()->type();
 
-    if (FLAG_taint_policy) {
-      __ Untaint(reg);
-    }
-
     if (type.IsBoolean()) {
       __ CompareRoot(reg, Heap::kTrueValueRootIndex);
       EmitBranch(true_block, false_block, equal);
@@ -1555,6 +1551,7 @@ void LCodeGen::DoCmpConstantEqAndBranch(LCmpConstantEqAndBranch* instr) {
 
 void LCodeGen::DoIsNilAndBranch(LIsNilAndBranch* instr) {
   Register reg = ToRegister(instr->InputAt(0));
+  Register scratch;
   int false_block = chunk_->LookupDestination(instr->false_block_id());
 
   // If the expression is known to be untagged or a smi, then it's definitely
@@ -1566,7 +1563,9 @@ void LCodeGen::DoIsNilAndBranch(LIsNilAndBranch* instr) {
   }
 
   if (FLAG_taint_policy) {
-    __ Untaint(reg);
+    scratch = ToRegister(instr->TempAt(0));
+    __ Untaint(scratch, reg);
+    reg = scratch;
   }
 
   int true_block = chunk_->LookupDestination(instr->true_block_id());
@@ -1577,6 +1576,9 @@ void LCodeGen::DoIsNilAndBranch(LIsNilAndBranch* instr) {
   if (instr->kind() == kStrictEquality) {
     EmitBranch(true_block, false_block, equal);
   } else {
+    if (!FLAG_taint_policy) {
+      scratch = ToRegister(instr->TempAt(0));
+    }
     Heap::RootListIndex other_nil_value = instr->nil() == kNullValue ?
         Heap::kUndefinedValueRootIndex :
         Heap::kNullValueRootIndex;
@@ -1588,7 +1590,6 @@ void LCodeGen::DoIsNilAndBranch(LIsNilAndBranch* instr) {
     __ JumpIfSmi(reg, false_label);
     // Check for undetectable objects by looking in the bit field in
     // the map. The object has already been smi checked.
-    Register scratch = ToRegister(instr->TempAt(0));
     __ movq(scratch, FieldOperand(reg, HeapObject::kMapOffset));
     __ testb(FieldOperand(scratch, Map::kBitFieldOffset),
              Immediate(1 << Map::kIsUndetectable));

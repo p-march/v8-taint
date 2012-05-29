@@ -3052,6 +3052,19 @@ void FullCodeGenerator::EmitStringCharAt(CallRuntime* expr) {
   Label need_conversion;
   Label index_out_of_range;
   Label done;
+
+  if (FLAG_taint_policy) {
+    Label not_tainted;
+    __ JumpIfNotTainted(object, &not_tainted, Label::kNear);
+    __ push(object);
+    __ push(index);
+    __ SmiAddConstant(index, index, Smi::FromInt(1));
+    __ push(index);
+    __ CallRuntime(Runtime::kSubString, 3);
+    __ jmp(&done);
+    __ bind(&not_tainted);
+  }
+
   StringCharAtGenerator generator(object,
                                   index,
                                   scratch,

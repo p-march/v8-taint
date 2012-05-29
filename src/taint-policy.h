@@ -67,6 +67,15 @@ class TaintPolicy : public AllStatic {
     return false;
   }
 
+  static inline bool HasTaintedObjectArguments(Vector< Handle<Object> >& args) {
+    for (int i = 2; i < args.length(); i++) {
+      if (args[i]->IsTainted() || args[i]->HasTaintedWrapper()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   static inline bool HasTaintedArgumentsButHolder(Vector< Handle<Object> >& args) {
     for (int i = 3; i < args.length(); i++) {
       if (args[i]->IsTainted()) {
@@ -90,12 +99,18 @@ class TaintPolicy : public AllStatic {
 
   static inline void PrintArguments(Arguments& args) {
     for (int i = 0; i < args.length(); i++) {
+      if (args[i]->HasTaintedWrapper()) {
+        printf("TW: ");
+      }
       args[i]->ShortPrint(); printf("\n");
     }
   }
 
   static inline void PrintArguments(Vector< Handle<Object> >& args) {
     for (int i = 0; i < args.length(); i++) {
+      if (args[i]->HasTaintedWrapper()) {
+        printf("TW: ");
+      }
       args[i]->ShortPrint(); printf("\n");
     }
   }

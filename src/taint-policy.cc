@@ -264,11 +264,11 @@ TaintPolicy::PolicyAction TaintPolicy::GetPolicyAction(Isolate *isolate,
 
 
 MaybeObject* TaintPolicy::DefaultTaintPolicyAction(Vector< Handle<Object> >& args) {
-  if (HasTaintedArguments(args)) {
-    if (!args[2]->IsTainted() && !args[2]->GetTaintedWrapper()) {
+  if (HasTaintedObjectArguments(args)) {
+    if (!args[2]->IsTainted() && !args[2]->HasTaintedWrapper()) {
       USE(args[2]->Taint());
     }
-    if (!args[0]->IsTainted() && !args[0]->GetTaintedWrapper()) {
+    if (!args[0]->IsTainted() && !args[0]->HasTaintedWrapper()) {
       return args[0]->Taint();
     }
   }
@@ -297,7 +297,7 @@ MaybeObject* TaintPolicy::BeforeTaintPolicyAction(Isolate* isolate,
   }
 
   if (action & kTaintHolder) {
-    if (!args[2]->IsTainted() && !args[2]->GetTaintedWrapper()) {
+    if (!args[2]->IsTainted() && !args[2]->HasTaintedWrapper()) {
       USE(args[2]->Taint());
     }
   }
@@ -336,13 +336,13 @@ MaybeObject* TaintPolicy::TaintPolicyAction(Isolate* isolate,
   }
 
   if (action & kTaintHolder) {
-    if (!args[2]->IsTainted() && !args[2]->GetTaintedWrapper()) {
+    if (!args[2]->IsTainted() && !args[2]->HasTaintedWrapper()) {
       USE(args[2]->Taint());
     }
   }
 
   if (action & kTaintResult) {
-    if (!args[0]->IsTainted() && !args[0]->GetTaintedWrapper()) {
+    if (!args[0]->IsTainted() && !args[0]->HasTaintedWrapper()) {
       return args[0]->Taint();
     }
   }

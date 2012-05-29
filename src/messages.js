@@ -52,7 +52,7 @@ function FormatString(format, message) {
         var limit = has_plus ? args.length : arg_num + 1;
         for (var j = arg_num; j < limit; j++) {
           try {
-            str += %_IsTainted(args[j]) ? "<Tainted argument>, " : ToDetailString(args[j]) + ", ";
+            str += %_IsTainted(args[j]) ? ToDetailString(%GetTaintedObject(args[j])) + ", " : ToDetailString(args[j]) + ", ";
           } catch (e) {
             str += "#<error>, ";
           }

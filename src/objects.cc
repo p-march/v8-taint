@@ -891,6 +891,19 @@ Object* Object::GetTaintedWrapper() {
 }
 
 
+bool Object::HasTaintedWrapper() {
+  if (this->IsTainted())
+    return true;
+
+  if (!this->IsJSObject())
+    return false;
+
+  JSObject *self = JSObject::cast(this);
+  return self->tainted() != Smi::FromInt(0) &&
+         self->tainted() != self->GetHeap()->null_value();
+}
+
+
 MaybeObject* Object::TaintReference() {
   ASSERT(!this->IsTainted());
   ASSERT(!this->IsSpecObject());
@@ -911,10 +924,26 @@ MaybeObject* Object::TaintReference() {
 MaybeObject* Object::TaintObject() {
   ASSERT(!this->IsTainted());
   ASSERT(this->IsJSObject());
-  ASSERT(JSObject::cast(this)->tainted() == NULL);
+  if (JSObject::cast(this)->tainted() != 0) {
+    if (JSObject::cast(this)->tainted() ==
+        JSObject::cast(this)->GetHeap()->null_value()) {
+      return this;
+    } else {
+      return JSObject::cast(this)->tainted();
+    }
+  }
 
   /* Never taint functions */
   if (HeapObject::cast(this)->map()->instance_type() == JS_FUNCTION_TYPE) {
+    return this;
+  }
+
+  /* Never taint gloabls */
+  if (HeapObject::cast(this)->map()->instance_type() == JS_GLOBAL_PROXY_TYPE) {
+    return this;
+  }
+
+  if (HeapObject::cast(this)->map()->instance_type() == JS_ARRAY_TYPE) {
     return this;
   }
 
@@ -973,13 +1002,23 @@ MaybeObject* Object::TaintObject() {
 
   // CLEAN(petr):
   printf("Tainting object %s %p clone %p space %d\n", this->IsHeapObject() ?
-         TypeToString(HeapObject::cast(this)->map()->instance_type()) : "smi",
+         TypeToString(HeapObject::cast(clone)->map()->instance_type()) : "smi",
          (void*) this, (void*)clone, space);
-#if 0
+
+  if (JS_ARRAY_TYPE == HeapObject::cast(clone)->map()->instance_type()) {
+    printf("here\n");
+  }
+#if 1
+  ASSERT(HeapObject::cast(clone)->map()->instance_type() != JS_GLOBAL_PROXY_TYPE);
+  clone->ShortPrint(); printf("\n");
+#endif
+#if 1
   Object* constructor_name =
             JSFunction::cast(JSObject::cast(clone)->map()->constructor())->shared()->name();
   constructor_name->ShortPrint(); printf("\n");
-  ASSERT(!String::cast(constructor_name)->Equals(*heap->isolate()->factory()->LookupAsciiSymbol("HTMLDocument")));
+  if (String::cast(constructor_name)->Equals(*heap->isolate()->factory()->LookupAsciiSymbol("HTMLDocument"))) {
+    heap->isolate()->PrintStack();
+    ASSERT(!String::cast(constructor_name)->Equals(*heap->isolate()->factory()->LookupAsciiSymbol("HTMLDocument")));  }
 #endif
 
   return self;
@@ -1013,9 +1052,11 @@ MaybeObject* Object::UntaintObject() {
   Tainted* tainted = Tainted::cast(this);
   Object* object = tainted->tainted_object();
   ASSERT(object->IsJSObject());
-  ASSERT(JSObject::cast(object)->tainted() != NULL);
+  JSObject *self = JSObject::cast(object);
+  ASSERT(self->tainted() &&
+         self->tainted() != self->GetHeap()->null_value());
 
-  JSObject::cast(object)->set_tainted(Smi::FromInt(0));
+  self->set_tainted(Smi::FromInt(0));
 
   HeapObject* heap_obj = HeapObject::cast(object);
   Heap* heap = heap_obj->GetHeap();
@@ -1057,6 +1098,27 @@ MaybeObject* Object::Untaint() {
     return UntaintObject();
   } else {
     return UntaintReference();
+  }
+}
+
+
+void Object::Untaintable() {
+  ASSERT(!this->IsTainted());
+  ASSERT(this->IsSpecObject());
+  JSObject *self = JSObject::cast(this);
+  ASSERT(self->tainted() == Smi::FromInt(0) || 
+         self->tainted() == self->GetHeap()->null_value());
+  self->set_tainted(self->GetHeap()->null_value());
+}
+
+
+void Object::Taintable() {
+  ASSERT(!this->IsTainted());
+  ASSERT(this->IsSpecObject());
+
+  JSObject *self = JSObject::cast(this);
+  if (self->tainted() == self->GetHeap()->null_value()) {
+    self->set_tainted(Smi::FromInt(0));
   }
 }
 
@@ -2401,12 +2463,13 @@ MaybeObject* JSObject::SetPropertyWithCallbackTaintCheck(
     JSObject* holder,
     StrictModeFlag strict_mode) {
   Isolate* isolate = name->GetIsolate();
-  if (!isolate->context()->TaintPolicyIsEnabled())
+  if (!isolate->context()->TaintPolicyIsEnabled()) {
     return SetPropertyWithCallback(structure,
                                    name,
-                                   value,
+                                   value->IsTainted() ? Tainted::cast(value)->tainted_object() : value,
                                    holder,
                                    strict_mode);
+  }
 
   // do not track __defineGetter__ and foreign callbacks
   if (structure->IsFixedArray())
