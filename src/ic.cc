@@ -2026,7 +2026,8 @@ RUNTIME_FUNCTION(MaybeObject*, KeyedStoreIC_Slow) {
 
 RUNTIME_FUNCTION(MaybeObject*, KeyedStoreIC_MissForceGeneric) {
   ASSERT_IF_TAINTED_ARG(0);
-  ASSERT_IF_TAINTED_ARG(1);
+  bool __tainted = false;
+  UNTAINT_ARG(args[1]);
   HandleScope scope(isolate);
   ASSERT(args.length() == 3);
   KeyedStoreIC ic(isolate);

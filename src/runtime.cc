@@ -8894,7 +8894,6 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_Call) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_Apply) {
-  ASSERT_IF_TAINTED_ARGS();
   HandleScope scope(isolate);
   ASSERT(args.length() == 5);
   CONVERT_CHECKED(JSReceiver, fun, args[0]);
