@@ -3489,6 +3489,52 @@ void StackCheckStub::Generate(MacroAssembler* masm) {
 }
 
 
+void TaintWrapperStub::Generate(MacroAssembler* masm) {
+  Register left = rdx;
+  Register right = rax;
+
+  Comment untaint_comment(masm, "-- Untaint arguments");
+  __ ClearTaintFlag();
+  __ UntaintWithFlag(left);
+  __ UntaintWithFlag(right);
+
+  __ Call(target_stub_->GetCode(), RelocInfo::CODE_TARGET, kNoASTId);
+  // This nop is to allow repatching of the target stub
+  __ nop();
+
+  Register result = rax;
+  Label done, fast, slow;
+
+  Comment taint_result_comment(masm, "-- Taint result");
+  __ JumpIfTaintFlagNotSet(&done);
+
+  __ JumpIfSmi(result, &fast);
+  __ CmpObjectType(result, FIRST_SPEC_OBJECT_TYPE, rcx);
+  __ j(above, &slow);
+
+  __ bind(&fast);
+  __ AllocateTainted(rcx, rbx, &slow);
+  __ movq(FieldOperand(rcx, Tainted::kObjectOffset), result);
+  __ movq(result, rcx);
+  __ jmp(&done);
+
+  __ bind(&slow);
+#if DEBUG
+  // NOTE(petr): no JSObjects should be return by target stubs
+  // consider disabling slow path
+  __ Abort("Operand is a JSObject");
+#endif
+  {
+    FrameScope scope(masm, StackFrame::INTERNAL);
+    __ push(result);
+    __ CallRuntime(Runtime::kTaint, 1);
+  }
+
+  __ bind(&done);
+  __ ret(0);
+}
+
+
 void CallFunctionStub::FinishCode(Handle<Code> code) {
   code->set_has_function_cache(false);
 }

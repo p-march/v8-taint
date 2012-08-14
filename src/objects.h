@@ -3924,13 +3924,14 @@ class Code: public HeapObject {
     BINARY_OP_IC,
     COMPARE_IC,
     TO_BOOLEAN_IC,
+    TAINT_WRAPPER_IC,
     // No more than 16 kinds. The value currently encoded in four bits in
     // Flags.
 
     // Pseudo-kinds.
     REGEXP = BUILTIN,
     FIRST_IC_KIND = LOAD_IC,
-    LAST_IC_KIND = TO_BOOLEAN_IC
+    LAST_IC_KIND = TAINT_WRAPPER_IC
   };
 
   enum {

@@ -1485,6 +1485,7 @@ static void ReportCodeKindStatistics() {
       CASE(BINARY_OP_IC);
       CASE(COMPARE_IC);
       CASE(TO_BOOLEAN_IC);
+      CASE(TAINT_WRAPPER_IC);
     }
   }
 

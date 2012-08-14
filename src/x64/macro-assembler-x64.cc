@@ -175,6 +175,13 @@ void MacroAssembler::StoreRoot(Register source, Heap::RootListIndex index) {
 }
 
 
+void MacroAssembler::StoreRoot(Smi* source, Heap::RootListIndex index) {
+  ASSERT(root_array_available_);
+  Move(Operand(kRootRegister, (index << kPointerSizeLog2) - kRootRegisterBias),
+       source);
+}
+
+
 void MacroAssembler::PushRoot(Heap::RootListIndex index) {
   ASSERT(root_array_available_);
   push(Operand(kRootRegister, (index << kPointerSizeLog2) - kRootRegisterBias));
@@ -185,6 +192,13 @@ void MacroAssembler::CompareRoot(Register with, Heap::RootListIndex index) {
   ASSERT(root_array_available_);
   cmpq(with, Operand(kRootRegister,
                      (index << kPointerSizeLog2) - kRootRegisterBias));
+}
+
+
+void MacroAssembler::CompareRoot(Smi *with, Heap::RootListIndex index) {
+  ASSERT(root_array_available_);
+  SmiCompare(Operand(kRootRegister,
+             (index << kPointerSizeLog2) - kRootRegisterBias), with);
 }
 
 
@@ -3729,6 +3743,42 @@ void MacroAssembler::Untaint(Register src) {
 }
 
 
+void MacroAssembler::UntaintWithFlag(Register src) {
+  Label not_tainted;
+  Condition smi = CheckSmi(src);
+  j(smi, &not_tainted, Label::kNear);
+  Condition tainted = CheckTainted(src);
+  j(NegateCondition(tainted), &not_tainted, Label::kNear);
+#ifdef TAINT_FLAG
+  StoreRoot(Smi::FromInt(1), Heap::kTaintFlagRootIndex);
+#else
+  Move(Operand(rsp, 0), Smi::FromInt(1));
+#endif
+  movq(src, FieldOperand(src, Tainted::kObjectOffset));
+  bind(&not_tainted);
+}
+
+
+void MacroAssembler::ClearTaintFlag() {
+#ifdef TAINT_FLAG
+  StoreRoot(Smi::FromInt(0), Heap::kTaintFlagRootIndex);
+#else
+  Push(Smi::FromInt(0));
+#endif
+}
+
+
+void MacroAssembler::JumpIfTaintFlagNotSet(Label* not_set) {
+#ifdef TAINT_FLAG
+  CompareRoot(Smi::FromInt(0), Heap::kTaintFlagRootIndex);
+#else
+  pop(kScratchRegister);
+  SmiCompare(Operand(rsp, -kPointerSize), Smi::FromInt(0));
+#endif  
+  j(equal, not_set);
+}
+
+
 void MacroAssembler::Untaint(Register dst, Register src) {
   movq(dst, src);
   Untaint(dst);
@@ -3763,6 +3813,23 @@ void MacroAssembler::AllocateHeapNumber(Register result,
 
   // Set the map.
   LoadRoot(kScratchRegister, Heap::kHeapNumberMapRootIndex);
+  movq(FieldOperand(result, HeapObject::kMapOffset), kScratchRegister);
+}
+
+
+void MacroAssembler::AllocateTainted(Register result,
+                                     Register scratch,
+                                     Label* gc_required) {
+  // Allocate heap number in new space.
+  AllocateInNewSpace(Tainted::kSize,
+                     result,
+                     scratch,
+                     no_reg,
+                     gc_required,
+                     TAG_OBJECT);
+
+  // Set the map.
+  LoadRoot(kScratchRegister, Heap::kTaintedMapRootIndex);
   movq(FieldOperand(result, HeapObject::kMapOffset), kScratchRegister);
 }
 

@@ -71,7 +71,8 @@ namespace internal {
   V(DebuggerStatement)                   \
   V(StringDictionaryLookup)              \
   V(ElementsTransitionAndStore)          \
-  V(StoreArrayLiteralElement)
+  V(StoreArrayLiteralElement)            \
+  V(TaintWrapper)
 
 // List of code stubs only used on ARM platforms.
 #ifdef V8_TARGET_ARCH_ARM
@@ -116,8 +117,13 @@ class CodeStub BASE_EMBEDDED {
     NUMBER_OF_IDS
   };
 
+  enum TWrapper {
+    NO_TAINT_WRAPPER = 0,
+    WITH_TAINT_WRAPPER = 1
+  };
+
   // Retrieve the code for the stub. Generate the code if needed.
-  Handle<Code> GetCode();
+  Handle<Code> GetCode(TWrapper taint_wrapper = NO_TAINT_WRAPPER);
 
   static Major MajorKeyFromKey(uint32_t key) {
     return static_cast<Major>(MajorKeyBits::decode(key));
@@ -282,6 +288,23 @@ class StackCheckStub : public CodeStub {
  private:
   Major MajorKey() { return StackCheck; }
   int MinorKey() { return 0; }
+};
+
+
+class TaintWrapperStub : public CodeStub {
+ public:
+  TaintWrapperStub(CodeStub* target_stub)
+    : target_stub_(target_stub) { }
+
+  void Generate(MacroAssembler* masm);
+
+ private:
+  virtual int GetCodeKind() { return Code::TAINT_WRAPPER_IC; }
+
+  Major MajorKey() { return TaintWrapper; }
+  int MinorKey() { return 0; }
+
+  CodeStub* target_stub_;
 };
 
 

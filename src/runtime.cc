@@ -4779,8 +4779,8 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_IgnoreAttributesAndSetProperty) {
     attributes = static_cast<PropertyAttributes>(unchecked_value);
   }
 
-  object->
-      SetLocalPropertyIgnoreAttributes(name, args[2], attributes);
+  return object->
+    SetLocalPropertyIgnoreAttributes(name, args[2], attributes);
 }
 
 

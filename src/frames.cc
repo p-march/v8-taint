@@ -431,7 +431,9 @@ StackFrame::Type StackFrame::ComputeType(Isolate* isolate, State* state) {
     // as nobody tries to GC...
     if (SafeStackFrameIterator::is_active(isolate)) return JAVA_SCRIPT;
     Code::Kind kind = GetContainingCode(isolate, *(state->pc_address))->kind();
-    ASSERT(kind == Code::FUNCTION || kind == Code::OPTIMIZED_FUNCTION);
+    ASSERT(kind == Code::FUNCTION ||
+           kind == Code::TAINT_WRAPPER_IC ||
+           kind == Code::OPTIMIZED_FUNCTION);
     return (kind == Code::OPTIMIZED_FUNCTION) ? OPTIMIZED : JAVA_SCRIPT;
   }
   return static_cast<StackFrame::Type>(Smi::cast(marker)->value());

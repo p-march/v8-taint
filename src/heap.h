@@ -158,6 +158,9 @@ inline Heap* _inline_get_heap_();
   V(Script, empty_script, EmptyScript)                                         \
   V(Smi, real_stack_limit, RealStackLimit)                                     \
   V(StringDictionary, intrinsic_function_names, IntrinsicFunctionNames)        \
+/* #ifdef TAINT_FLAG */                                                        \
+  V(Smi, taint_flag, TaintFlag)                                                \
+/* #endif */                                                                   \
 
 #define ROOT_LIST(V)                                  \
   STRONG_ROOT_LIST(V)                                 \

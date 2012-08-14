@@ -8558,6 +8558,7 @@ const char* Code::Kind2String(Kind kind) {
     case BINARY_OP_IC: return "BINARY_OP_IC";
     case COMPARE_IC: return "COMPARE_IC";
     case TO_BOOLEAN_IC: return "TO_BOOLEAN_IC";
+    case TAINT_WRAPPER_IC: return "TAINT_WRAPPER_IC";
   }
   UNREACHABLE();
   return NULL;

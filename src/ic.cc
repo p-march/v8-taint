@@ -2026,7 +2026,7 @@ RUNTIME_FUNCTION(MaybeObject*, KeyedStoreIC_Slow) {
 
 RUNTIME_FUNCTION(MaybeObject*, KeyedStoreIC_MissForceGeneric) {
   ASSERT_IF_TAINTED_ARG(0);
-  bool __tainted = false;
+  UNTAINT_ARGS(0);
   UNTAINT_ARG(args[1]);
   HandleScope scope(isolate);
   ASSERT(args.length() == 3);
@@ -2290,7 +2290,9 @@ RUNTIME_FUNCTION(MaybeObject*, BinaryOp_Patch) {
   }
 
   BinaryOpStub stub(key, type, result_type);
-  Handle<Code> code = stub.GetCode();
+  Handle<Code> code = stub.GetCode(__tainted ?
+                                   CodeStub::WITH_TAINT_WRAPPER :
+                                   CodeStub::NO_TAINT_WRAPPER);
   if (!code.is_null()) {
     if (FLAG_trace_ic) {
       PrintF("[BinaryOpIC (%s->(%s->%s))#%s]\n",

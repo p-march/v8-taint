@@ -2937,7 +2937,8 @@ void Code::set_major_key(int major) {
          kind() == UNARY_OP_IC ||
          kind() == BINARY_OP_IC ||
          kind() == COMPARE_IC ||
-         kind() == TO_BOOLEAN_IC);
+         kind() == TO_BOOLEAN_IC ||
+         kind() == TAINT_WRAPPER_IC);
   ASSERT(0 <= major && major < 256);
   WRITE_BYTE_FIELD(this, kStubMajorKeyOffset, major);
 }
