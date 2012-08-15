@@ -3535,6 +3535,13 @@ void TaintWrapperStub::Generate(MacroAssembler* masm) {
 }
 
 
+void TaintWrapperStub::PrintName(StringStream* stream) {
+  stream->Add("TaintWrapperStub(");
+  target_stub_->PrintName(stream);
+  stream->Add(")");
+}
+
+
 void CallFunctionStub::FinishCode(Handle<Code> code) {
   code->set_has_function_cache(false);
 }

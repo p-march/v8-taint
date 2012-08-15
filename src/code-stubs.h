@@ -219,6 +219,7 @@ class CodeStub BASE_EMBEDDED {
   class MinorKeyBits: public BitField<uint32_t, kMajorBits, kMinorBits> {};
 
   friend class BreakPointIterator;
+  friend class TaintWrapperStub;
 };
 
 
@@ -299,10 +300,17 @@ class TaintWrapperStub : public CodeStub {
   void Generate(MacroAssembler* masm);
 
  private:
+  virtual void PrintName(StringStream* stream);
+
   virtual int GetCodeKind() { return Code::TAINT_WRAPPER_IC; }
 
   Major MajorKey() { return TaintWrapper; }
-  int MinorKey() { return 0; }
+  int MinorKey() {
+    // A full key of a target stub is used as minor key
+    // Make sure that the full key fits in kMinorBits
+    ASSERT(!(target_stub_->GetKey() >> kMinorBits));
+    return target_stub_->GetKey();
+  }
 
   CodeStub* target_stub_;
 };
