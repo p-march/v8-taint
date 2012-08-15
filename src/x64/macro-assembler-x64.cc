@@ -3831,6 +3831,7 @@ void MacroAssembler::AllocateTainted(Register result,
   // Set the map.
   LoadRoot(kScratchRegister, Heap::kTaintedMapRootIndex);
   movq(FieldOperand(result, HeapObject::kMapOffset), kScratchRegister);
+  Move(FieldOperand(result, Tainted::kSizeOffset), Smi::FromInt(Tainted::kSize));
 }
 
 

@@ -311,6 +311,7 @@ void IC::Clear(Address address) {
     case Code::BINARY_OP_IC:
     case Code::COMPARE_IC:
     case Code::TO_BOOLEAN_IC:
+    case Code::TAINT_WRAPPER_IC:
       // Clearing these is tricky and does not
       // make any performance difference.
       return;

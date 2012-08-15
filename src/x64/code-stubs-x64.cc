@@ -3503,27 +3503,27 @@ void TaintWrapperStub::Generate(MacroAssembler* masm) {
   __ nop();
 
   Register result = rax;
-  Label done, fast, slow;
+  Label done, slow;
 
   Comment taint_result_comment(masm, "-- Taint result");
   __ JumpIfTaintFlagNotSet(&done);
 
-  __ JumpIfSmi(result, &fast);
+#if DEBUG
+  Label primitive;
+  __ JumpIfSmi(result, &primitive);
   __ CmpObjectType(result, FIRST_SPEC_OBJECT_TYPE, rcx);
   __ j(above, &slow);
+  // NOTE(petr): no JSObjects should be return by target stubs
+  __ Abort("Operand is a JSObject");
+  __ bind(&primitive);
+#endif
 
-  __ bind(&fast);
   __ AllocateTainted(rcx, rbx, &slow);
   __ movq(FieldOperand(rcx, Tainted::kObjectOffset), result);
   __ movq(result, rcx);
   __ jmp(&done);
 
   __ bind(&slow);
-#if DEBUG
-  // NOTE(petr): no JSObjects should be return by target stubs
-  // consider disabling slow path
-  __ Abort("Operand is a JSObject");
-#endif
   {
     FrameScope scope(masm, StackFrame::INTERNAL);
     __ push(result);
