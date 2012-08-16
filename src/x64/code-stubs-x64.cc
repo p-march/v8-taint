@@ -683,19 +683,29 @@ void UnaryOpStub::Generate(MacroAssembler* masm) {
 
 
 void UnaryOpStub::GenerateTypeTransition(MacroAssembler* masm) {
+  if (taint_mode_) {
+    // must get rid of a taint wrapper's frame
+    // which is a return address and a taint flag
+#ifdef TAINT_FLAG
+    __ addq(rsp, Immediate(kPointerSize));
+#else
+    __ addq(rsp, Immediate(2 * kPointerSize));
+#endif
+  }
   __ pop(rcx);  // Save return address.
 
   __ push(rax);  // the operand
   __ Push(Smi::FromInt(op_));
   __ Push(Smi::FromInt(mode_));
   __ Push(Smi::FromInt(operand_type_));
+  __ Push(Smi::FromInt(taint_mode_));
 
   __ push(rcx);  // Push return address.
 
   // Patch the caller to an appropriate specialized stub and return the
   // operation result to the caller of the stub.
   __ TailCallExternalReference(
-      ExternalReference(IC_Utility(IC::kUnaryOp_Patch), masm->isolate()), 4, 1);
+      ExternalReference(IC_Utility(IC::kUnaryOp_Patch), masm->isolate()), 5, 1);
 }
 
 
@@ -918,6 +928,15 @@ void UnaryOpStub::PrintName(StringStream* stream) {
 
 
 void BinaryOpStub::GenerateTypeTransition(MacroAssembler* masm) {
+  if (taint_mode_) {
+    // must get rid of a taint wrapper's frame
+    // which is a return address and a taint flag
+#ifdef TAINT_FLAG
+    __ addq(rsp, Immediate(kPointerSize));
+#else
+    __ addq(rsp, Immediate(2 * kPointerSize));
+#endif
+  }
   __ pop(rcx);  // Save return address.
   __ push(rdx);
   __ push(rax);
@@ -927,6 +946,7 @@ void BinaryOpStub::GenerateTypeTransition(MacroAssembler* masm) {
   __ Push(Smi::FromInt(MinorKey()));
   __ Push(Smi::FromInt(op_));
   __ Push(Smi::FromInt(operands_type_));
+  __ Push(Smi::FromInt(taint_mode_));
 
   __ push(rcx);  // Push return address.
 
@@ -935,7 +955,7 @@ void BinaryOpStub::GenerateTypeTransition(MacroAssembler* masm) {
   __ TailCallExternalReference(
       ExternalReference(IC_Utility(IC::kBinaryOp_Patch),
                         masm->isolate()),
-      5,
+      6,
       1);
 }
 
@@ -3495,8 +3515,11 @@ void TaintWrapperStub::Generate(MacroAssembler* masm) {
 
   Comment untaint_comment(masm, "-- Untaint arguments");
   __ ClearTaintFlag();
-  __ UntaintWithFlag(left);
   __ UntaintWithFlag(right);
+  // TODO(petr): figure out a better solution than to check stub keys
+  if (target_stub_->MajorKey() == BinaryOp) {
+    __ UntaintWithFlag(left);
+  }
 
   __ Call(target_stub_->GetCode(), RelocInfo::CODE_TARGET, kNoASTId);
   // This nop is to allow repatching of the target stub
@@ -3512,7 +3535,7 @@ void TaintWrapperStub::Generate(MacroAssembler* masm) {
   Label primitive;
   __ JumpIfSmi(result, &primitive);
   __ CmpObjectType(result, FIRST_SPEC_OBJECT_TYPE, rcx);
-  __ j(above, &slow);
+  __ j(below, &slow);
   // NOTE(petr): no JSObjects should be returned by target stubs
   __ Abort("Operand is a JSObject");
   __ bind(&primitive);

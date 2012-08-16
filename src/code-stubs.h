@@ -117,13 +117,8 @@ class CodeStub BASE_EMBEDDED {
     NUMBER_OF_IDS
   };
 
-  enum TWrapper {
-    NO_TAINT_WRAPPER = 0,
-    WITH_TAINT_WRAPPER = 1
-  };
-
   // Retrieve the code for the stub. Generate the code if needed.
-  Handle<Code> GetCode(TWrapper taint_wrapper = NO_TAINT_WRAPPER);
+  Handle<Code> GetCode();
 
   static Major MajorKeyFromKey(uint32_t key) {
     return static_cast<Major>(MajorKeyBits::decode(key));
@@ -295,7 +290,7 @@ class StackCheckStub : public CodeStub {
 class TaintWrapperStub : public CodeStub {
  public:
   TaintWrapperStub(CodeStub* target_stub)
-    : target_stub_(target_stub) { }
+    : target_stub_(target_stub) { ASSERT(target_stub); }
 
   void Generate(MacroAssembler* masm);
 

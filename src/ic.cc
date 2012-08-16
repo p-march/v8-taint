@@ -2089,6 +2089,12 @@ UnaryOpIC::TypeInfo UnaryOpIC::GetTypeInfo(Handle<Object> operand) {
 UnaryOpIC::TypeInfo UnaryOpIC::ComputeNewType(
     UnaryOpIC::TypeInfo current_type,
     UnaryOpIC::TypeInfo previous_type) {
+  if (FLAG_taint_policy) {
+    // This may happen when using tainted data
+    if (current_type == previous_type) {
+      return current_type;
+    }
+  }
   switch (previous_type) {
     case UnaryOpIC::UNINITIALIZED:
       return current_type;
@@ -2201,7 +2207,7 @@ BinaryOpIC::TypeInfo BinaryOpIC::GetTypeInfo(Handle<Object> left,
 
 RUNTIME_FUNCTION(MaybeObject*, UnaryOp_Patch) {
   UNTAINT_ALL_ARGS();
-  ASSERT(args.length() == 4);
+  ASSERT(args.length() == 5);
 
   HandleScope scope(isolate);
   Handle<Object> operand = args.at<Object>(0);
@@ -2209,17 +2215,25 @@ RUNTIME_FUNCTION(MaybeObject*, UnaryOp_Patch) {
   UnaryOverwriteMode mode = static_cast<UnaryOverwriteMode>(args.smi_at(2));
   UnaryOpIC::TypeInfo previous_type =
       static_cast<UnaryOpIC::TypeInfo>(args.smi_at(3));
+  bool previous_taint_mode = static_cast<bool>(args.smi_at(4));
+  bool taint_mode = FLAG_taint_policy && FLAG_use_taint_spec &&
+                    (previous_taint_mode || HAS_TAINTED_ARGS());
 
   UnaryOpIC::TypeInfo type = UnaryOpIC::GetTypeInfo(operand);
   type = UnaryOpIC::ComputeNewType(type, previous_type);
 
-  UnaryOpStub stub(op, mode, type);
-  Handle<Code> code = stub.GetCode();
+  ASSERT(previous_type != type || previous_taint_mode != taint_mode);
+
+  UnaryOpStub stub(op, mode, type, taint_mode);
+  TaintWrapperStub tw_stub(&stub);
+  Handle<Code> code = taint_mode ? tw_stub.GetCode() : stub.GetCode();
   if (!code.is_null()) {
     if (FLAG_trace_ic) {
-      PrintF("[UnaryOpIC (%s->%s)#%s]\n",
+      PrintF("[UnaryOpIC (%s%s->%s%s)#%s]\n",
              UnaryOpIC::GetName(previous_type),
+             previous_taint_mode ? "-TW" : "",
              UnaryOpIC::GetName(type),
+             taint_mode ? "-TW" : "",
              Token::Name(op));
     }
     UnaryOpIC ic(isolate);
@@ -2253,7 +2267,7 @@ RUNTIME_FUNCTION(MaybeObject*, UnaryOp_Patch) {
 
 RUNTIME_FUNCTION(MaybeObject*, BinaryOp_Patch) {
   UNTAINT_ALL_ARGS();
-  ASSERT(args.length() == 5);
+  ASSERT(args.length() == 6);
 
   HandleScope scope(isolate);
   Handle<Object> left = args.at<Object>(0);
@@ -2262,6 +2276,9 @@ RUNTIME_FUNCTION(MaybeObject*, BinaryOp_Patch) {
   Token::Value op = static_cast<Token::Value>(args.smi_at(3));
   BinaryOpIC::TypeInfo previous_type =
       static_cast<BinaryOpIC::TypeInfo>(args.smi_at(4));
+  bool previous_taint_mode = static_cast<bool>(args.smi_at(5));
+  bool taint_mode = FLAG_taint_policy && FLAG_use_taint_spec &&
+                    (previous_taint_mode || HAS_TAINTED_ARGS());
 
   BinaryOpIC::TypeInfo type = BinaryOpIC::GetTypeInfo(left, right);
   type = BinaryOpIC::JoinTypes(type, previous_type);
@@ -2290,17 +2307,18 @@ RUNTIME_FUNCTION(MaybeObject*, BinaryOp_Patch) {
     result_type = BinaryOpIC::HEAP_NUMBER;
   }
 
-  BinaryOpStub stub(key, type, result_type);
-  Handle<Code> code = stub.GetCode(FLAG_use_taint_policy &&
-                                   FLAG_use_taint_spec &&
-                                   __tainted ?
-                                   CodeStub::WITH_TAINT_WRAPPER :
-                                   CodeStub::NO_TAINT_WRAPPER);
+  ASSERT(previous_type != type || previous_taint_mode != taint_mode);
+
+  BinaryOpStub stub(key, type, result_type, taint_mode);
+  TaintWrapperStub tw_stub(&stub);
+  Handle<Code> code = taint_mode ? tw_stub.GetCode() : stub.GetCode();
   if (!code.is_null()) {
     if (FLAG_trace_ic) {
-      PrintF("[BinaryOpIC (%s->(%s->%s))#%s]\n",
+      PrintF("[BinaryOpIC (%s%s->(%s%s->%s))#%s]\n",
              BinaryOpIC::GetName(previous_type),
+             previous_taint_mode ? "-TW" : "",
              BinaryOpIC::GetName(type),
+             taint_mode ? "-TW" : "",
              BinaryOpIC::GetName(result_type),
              Token::Name(op));
     }

@@ -96,16 +96,11 @@ int CodeStub::GetCodeKind() {
 }
 
 
-Handle<Code> CodeStub::GetCode(TWrapper taint_wrapper) {
+Handle<Code> CodeStub::GetCode() {
   Isolate* isolate = Isolate::Current();
   Factory* factory = isolate->factory();
   Heap* heap = isolate->heap();
   Code* code;
-
-  if (taint_wrapper) {
-    TaintWrapperStub stub(this);
-    return stub.GetCode();
-  }
 
   if (!FindCodeInCache(&code)) {
     HandleScope scope(isolate);
