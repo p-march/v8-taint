@@ -2291,7 +2291,9 @@ RUNTIME_FUNCTION(MaybeObject*, BinaryOp_Patch) {
   }
 
   BinaryOpStub stub(key, type, result_type);
-  Handle<Code> code = stub.GetCode(__tainted ?
+  Handle<Code> code = stub.GetCode(FLAG_use_taint_policy &&
+                                   FLAG_use_taint_spec &&
+                                   __tainted ?
                                    CodeStub::WITH_TAINT_WRAPPER :
                                    CodeStub::NO_TAINT_WRAPPER);
   if (!code.is_null()) {

@@ -3513,7 +3513,7 @@ void TaintWrapperStub::Generate(MacroAssembler* masm) {
   __ JumpIfSmi(result, &primitive);
   __ CmpObjectType(result, FIRST_SPEC_OBJECT_TYPE, rcx);
   __ j(above, &slow);
-  // NOTE(petr): no JSObjects should be return by target stubs
+  // NOTE(petr): no JSObjects should be returned by target stubs
   __ Abort("Operand is a JSObject");
   __ bind(&primitive);
 #endif

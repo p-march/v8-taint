@@ -521,6 +521,7 @@ DEFINE_bool(ll_prof, false, "Enable low-level linux profiler.")
 // Taint
 DEFINE_bool(taint_policy, false, "Enable taint tracking")
 DEFINE_string(taint_policy_file, "taint_policy.js", "Specify the name of the taint policy file.")
+DEFINE_bool(use_taint_spec, true, "use specialization for tainted data.")
 
 //
 // Disassembler only flags
