@@ -383,6 +383,52 @@ bool ToBooleanStub::Types::CanBeUndetectable() const {
 }
 
 
+const char* ToBooleanStub::Types::GetTypeAlias(Type type) {
+  switch (type) {
+    case UNDEFINED:
+      return "U";
+    case BOOLEAN:
+      return "B";
+    case NULL_TYPE:
+      return "N";
+    case SMI:
+      return "SM";
+    case SPEC_OBJECT:
+      return "SP";
+    case STRING:
+      return "ST";
+    case HEAP_NUMBER:
+      return "H";
+    default:
+      UNREACHABLE();
+      return "";
+  };
+}
+
+
+const char* ToBooleanStub::Types::GetName(Types types,
+                                          char* buf,
+                                          size_t size) {
+  ASSERT(size == kNameSize);
+  snprintf(buf, size, "%s%d%s%d%s%d%s%d%s%d%s%d%s%d",
+           GetTypeAlias(UNDEFINED),
+           types.Contains(UNDEFINED),
+           GetTypeAlias(BOOLEAN),
+           types.Contains(BOOLEAN),
+           GetTypeAlias(NULL_TYPE),
+           types.Contains(NULL_TYPE),
+           GetTypeAlias(SMI),
+           types.Contains(SMI),
+           GetTypeAlias(SPEC_OBJECT),
+           types.Contains(SPEC_OBJECT),
+           GetTypeAlias(STRING),
+           types.Contains(STRING),
+           GetTypeAlias(HEAP_NUMBER),
+           types.Contains(HEAP_NUMBER));
+  return buf;
+}
+
+
 void ElementsTransitionAndStoreStub::Generate(MacroAssembler* masm) {
   Label fail;
   if (!FLAG_trace_elements_transitions) {

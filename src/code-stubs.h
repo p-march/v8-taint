@@ -1036,15 +1036,20 @@ class ToBooleanStub: public CodeStub {
     bool NeedsMap() const;
     bool CanBeUndetectable() const;
 
+    static const char* GetTypeAlias(Type type);
+    static const char* GetName(Types types, char* buf, size_t size);
+
+    static const size_t kNameSize = 18;
+
    private:
     EnumSet<Type, byte> set_;
   };
 
-  static Types no_types() { return Types(); }
-  static Types all_types() { return Types((1 << NUMBER_OF_TYPES) - 1); }
-
   explicit ToBooleanStub(Register tos, Types types = Types())
       : tos_(tos), types_(types) { }
+
+  static Types no_types() { return Types(); }
+  static Types all_types() { return Types((1 << NUMBER_OF_TYPES) - 1); }
 
   void Generate(MacroAssembler* masm);
   virtual int GetCodeKind() { return Code::TO_BOOLEAN_IC; }

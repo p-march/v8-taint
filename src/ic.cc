@@ -2465,6 +2465,17 @@ RUNTIME_FUNCTION(MaybeObject*, ToBoolean_Patch) {
 
   ToBooleanStub stub(tos, new_types);
   Handle<Code> code = stub.GetCode();
+  if (FLAG_trace_ic) {
+    char old_types_name[ToBooleanStub::Types::kNameSize];
+    char new_types_name[ToBooleanStub::Types::kNameSize];
+    PrintF("[ToBooleanIC (%s->%s)]\n",
+           ToBooleanStub::Types::GetName(old_types,
+                                         old_types_name,
+                                         ToBooleanStub::Types::kNameSize),
+           ToBooleanStub::Types::GetName(new_types,
+                                         new_types_name,
+                                         ToBooleanStub::Types::kNameSize));
+  }
   ToBooleanIC ic(isolate);
   ic.patch(*code);
 
