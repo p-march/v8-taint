@@ -683,15 +683,6 @@ void UnaryOpStub::Generate(MacroAssembler* masm) {
 
 
 void UnaryOpStub::GenerateTypeTransition(MacroAssembler* masm) {
-  if (taint_mode_) {
-    // must get rid of a taint wrapper's frame
-    // which is a return address and a taint flag
-#ifdef TAINT_FLAG
-    __ addq(rsp, Immediate(kPointerSize));
-#else
-    __ addq(rsp, Immediate(2 * kPointerSize));
-#endif
-  }
   __ pop(rcx);  // Save return address.
 
   __ push(rax);  // the operand
@@ -928,15 +919,6 @@ void UnaryOpStub::PrintName(StringStream* stream) {
 
 
 void BinaryOpStub::GenerateTypeTransition(MacroAssembler* masm) {
-  if (taint_mode_) {
-    // must get rid of a taint wrapper's frame
-    // which is a return address and a taint flag
-#ifdef TAINT_FLAG
-    __ addq(rsp, Immediate(kPointerSize));
-#else
-    __ addq(rsp, Immediate(2 * kPointerSize));
-#endif
-  }
   __ pop(rcx);  // Save return address.
   __ push(rdx);
   __ push(rax);
@@ -4720,6 +4702,8 @@ void StringAddStub::GenerateConvertArgument(MacroAssembler* masm,
            Immediate(1 << Map::kStringWrapperSafeForDefaultValueOf));
   __ j(zero, slow);
   __ movq(arg, FieldOperand(arg, JSValue::kValueOffset));
+  // NOTE(petr): a value may be tainted but not the JSValue object
+  __ JumpIfTainted(arg, slow);
   __ movq(Operand(rsp, stack_offset), arg);
 
   __ bind(&done);

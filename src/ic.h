@@ -134,6 +134,11 @@ class IC {
   static inline JSObject* GetCodeCacheHolder(Object* object,
                                              InlineCacheHolderFlag holder);
 
+  void advance_pc(int value) {
+    pc_address_ = reinterpret_cast<Address*>(
+      reinterpret_cast<uintptr_t>(pc_address_) + value);
+  }
+
  protected:
   Address fp() const { return fp_; }
   Address pc() const { return *pc_address_; }

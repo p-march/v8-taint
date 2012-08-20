@@ -943,9 +943,10 @@ MaybeObject* Object::TaintObject() {
     return this;
   }
 
-  if (HeapObject::cast(this)->map()->instance_type() == JS_ARRAY_TYPE) {
-    return this;
-  }
+// TODO(petr): ???
+//  if (HeapObject::cast(this)->map()->instance_type() == JS_ARRAY_TYPE) {
+//    return this;
+//  }
 
   HeapObject* heap_obj = HeapObject::cast(this);
   Heap* heap = heap_obj->GetHeap();

@@ -2237,6 +2237,9 @@ RUNTIME_FUNCTION(MaybeObject*, UnaryOp_Patch) {
              Token::Name(op));
     }
     UnaryOpIC ic(isolate);
+    if (previous_taint_mode) {
+      ic.advance_pc(7 * kPointerSize);
+    }
     ic.patch(*code);
   }
 
@@ -2307,8 +2310,6 @@ RUNTIME_FUNCTION(MaybeObject*, BinaryOp_Patch) {
     result_type = BinaryOpIC::HEAP_NUMBER;
   }
 
-  ASSERT(previous_type != type || previous_taint_mode != taint_mode);
-
   BinaryOpStub stub(key, type, result_type, taint_mode);
   TaintWrapperStub tw_stub(&stub);
   Handle<Code> code = taint_mode ? tw_stub.GetCode() : stub.GetCode();
@@ -2323,6 +2324,9 @@ RUNTIME_FUNCTION(MaybeObject*, BinaryOp_Patch) {
              Token::Name(op));
     }
     BinaryOpIC ic(isolate);
+    if (previous_taint_mode) {
+      ic.advance_pc(8 * kPointerSize);
+    }
     ic.patch(*code);
 
     // Activate inlined smi code.
