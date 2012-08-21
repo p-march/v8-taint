@@ -4003,6 +4003,7 @@ class Code: public HeapObject {
   inline bool is_binary_op_stub() { return kind() == BINARY_OP_IC; }
   inline bool is_compare_ic_stub() { return kind() == COMPARE_IC; }
   inline bool is_to_boolean_ic_stub() { return kind() == TO_BOOLEAN_IC; }
+  inline bool is_taint_wrapper_stub() { return kind() == TAINT_WRAPPER_IC; }
 
   // [major_key]: For kind STUB or BINARY_OP_IC, the major key.
   inline int major_key();
@@ -4076,6 +4077,10 @@ class Code: public HeapObject {
   // [to_boolean_foo]: For kind TO_BOOLEAN_IC tells what state the stub is in.
   inline byte to_boolean_state();
   inline void set_to_boolean_state(byte value);
+
+  // [wrapped_stub]: For kind TAINT_WRAPPER_IC telss what stub it wrapps.
+  inline Code* wrapped_stub();
+  inline void set_wrapped_stub(Code* value);
 
   // For kind STUB, major_key == CallFunction, tells whether there is
   // a function cache in the instruction stream.
@@ -4223,6 +4228,7 @@ class Code: public HeapObject {
   static const int kCompareStateOffset = kStubMajorKeyOffset + 1;
   static const int kToBooleanTypeOffset = kStubMajorKeyOffset + 1;
   static const int kHasFunctionCacheOffset = kStubMajorKeyOffset + 1;
+  static const int kWrappedStubOffset = kStubMajorKeyOffset + 1;
 
   static const int kFullCodeFlags = kOptimizableOffset + 1;
   class FullCodeFlagsHasDeoptimizationSupportField:

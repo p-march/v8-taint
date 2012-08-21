@@ -290,7 +290,11 @@ class StackCheckStub : public CodeStub {
 class TaintWrapperStub : public CodeStub {
  public:
   TaintWrapperStub(CodeStub* target_stub)
-    : target_stub_(target_stub) { ASSERT(target_stub); }
+    : target_stub_(target_stub),
+      target_code_(target_stub_->GetCode()) {
+    ASSERT(target_stub);
+    ASSERT(!target_code_.is_null());
+  }
 
   void Generate(MacroAssembler* masm);
 
@@ -307,7 +311,13 @@ class TaintWrapperStub : public CodeStub {
     return target_stub_->GetKey();
   }
 
+  virtual void FinishCode(Handle<Code> code) {
+    ASSERT(!target_code_.is_null());
+    code->set_wrapped_stub(*target_code_);
+  }
+
   CodeStub* target_stub_;
+  Handle<Code> target_code_;
 };
 
 

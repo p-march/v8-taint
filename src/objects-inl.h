@@ -3138,6 +3138,21 @@ void Code::set_to_boolean_state(byte value) {
 }
 
 
+Code* Code::wrapped_stub() {
+  ASSERT(is_taint_wrapper_stub());
+  intptr_t value = READ_INTPTR_FIELD(this, kWrappedStubOffset);
+  return reinterpret_cast<Code*>(value);
+}
+
+
+void Code::set_wrapped_stub(Code *value) {
+  ASSERT(is_taint_wrapper_stub());
+  WRITE_INTPTR_FIELD(this,
+                     kWrappedStubOffset,
+                     reinterpret_cast<uintptr_t>(value));
+}
+
+
 bool Code::has_function_cache() {
   ASSERT(kind() == STUB);
   return READ_BYTE_FIELD(this, kHasFunctionCacheOffset) != 0;

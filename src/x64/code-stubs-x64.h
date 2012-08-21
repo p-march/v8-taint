@@ -160,6 +160,8 @@ class UnaryOpStub: public CodeStub {
   virtual void FinishCode(Handle<Code> code) {
     code->set_unary_op_type(operand_type_);
   }
+
+  friend class TaintWrapperStub;
 };
 
 
@@ -257,6 +259,7 @@ class BinaryOpStub: public CodeStub {
   }
 
   friend class CodeGenerator;
+  friend class TaintWrapperStub;
 };
 
 

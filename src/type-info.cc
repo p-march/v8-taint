@@ -301,7 +301,9 @@ TypeInfo TypeFeedbackOracle::BinaryType(BinaryOperation* expr) {
   Handle<Object> object = GetInfo(expr->id());
   TypeInfo unknown = TypeInfo::Unknown();
   if (!object->IsCode()) return unknown;
-  Handle<Code> code = Handle<Code>::cast(object);
+  Code *code_ptr = Code::cast(*object)->is_taint_wrapper_stub() ?
+    Code::cast(*object)->wrapped_stub() : Code::cast(*object);
+  Handle<Code> code(code_ptr);
   if (code->is_binary_op_stub()) {
     BinaryOpIC::TypeInfo type = static_cast<BinaryOpIC::TypeInfo>(
         code->binary_op_type());
@@ -543,6 +545,7 @@ void TypeFeedbackOracle::ProcessRelocInfos(ZoneList<RelocInfo>* infos) {
       case Code::BINARY_OP_IC:
       case Code::COMPARE_IC:
       case Code::TO_BOOLEAN_IC:
+      case Code::TAINT_WRAPPER_IC:
         SetInfo(ast_id, target);
         break;
 

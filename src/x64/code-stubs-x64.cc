@@ -3503,7 +3503,7 @@ void TaintWrapperStub::Generate(MacroAssembler* masm) {
     __ UntaintWithFlag(left);
   }
 
-  __ Call(target_stub_->GetCode(), RelocInfo::CODE_TARGET, kNoASTId);
+  __ Call(target_code_, RelocInfo::CODE_TARGET, kNoASTId);
   // This nop is to allow repatching of the target stub
   __ nop();
 
