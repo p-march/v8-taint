@@ -1002,14 +1002,14 @@ MaybeObject* Object::TaintObject() {
   }
 
   // CLEAN(petr):
-  printf("Tainting object %s %p clone %p space %d\n", this->IsHeapObject() ?
-         TypeToString(HeapObject::cast(clone)->map()->instance_type()) : "smi",
-         (void*) this, (void*)clone, space);
+  // printf("Tainting object %s %p clone %p space %d\n", this->IsHeapObject() ?
+         //TypeToString(HeapObject::cast(clone)->map()->instance_type()) : "smi",
+         //(void*) this, (void*)clone, space);
 
   if (JS_ARRAY_TYPE == HeapObject::cast(clone)->map()->instance_type()) {
     printf("here\n");
   }
-#if 1
+#if 0
   ASSERT(HeapObject::cast(clone)->map()->instance_type() != JS_GLOBAL_PROXY_TYPE);
   clone->ShortPrint(); printf("\n");
 #endif

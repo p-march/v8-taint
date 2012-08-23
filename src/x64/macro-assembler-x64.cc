@@ -3749,7 +3749,7 @@ void MacroAssembler::UntaintWithFlag(Register src) {
   j(smi, &not_tainted, Label::kNear);
   Condition tainted = CheckTainted(src);
   j(NegateCondition(tainted), &not_tainted, Label::kNear);
-#ifdef TAINT_FLAG
+#if 1 || TAINT_FLAG
   StoreRoot(Smi::FromInt(1), Heap::kTaintFlagRootIndex);
 #else
   Move(Operand(rsp, 0), Smi::FromInt(1));
@@ -3760,7 +3760,7 @@ void MacroAssembler::UntaintWithFlag(Register src) {
 
 
 void MacroAssembler::ClearTaintFlag() {
-#ifdef TAINT_FLAG
+#if 1 || TAINT_FLAG
   StoreRoot(Smi::FromInt(0), Heap::kTaintFlagRootIndex);
 #else
   Push(Smi::FromInt(0));
@@ -3769,7 +3769,7 @@ void MacroAssembler::ClearTaintFlag() {
 
 
 void MacroAssembler::JumpIfTaintFlagNotSet(Label* not_set) {
-#ifdef TAINT_FLAG
+#if 1 || TAINT_FLAG
   CompareRoot(Smi::FromInt(0), Heap::kTaintFlagRootIndex);
 #else
   pop(kScratchRegister);
