@@ -2771,6 +2771,7 @@ MaybeObject* Heap::AllocateForeign(Address address, PretenureFlag pretenure) {
 MaybeObject* Heap::AllocateTainted() {
   // Statically ensure that it is safe to allocate tainted in paged spaces.
   STATIC_ASSERT(Tainted::kSize <= Page::kMaxHeapObjectSize);
+  ASSERT(allocation_allowed_ && gc_state_ == NOT_IN_GC);
   Object* result;
   // Tainted Objects allocated only for tainting immutable objects and
   // objects of basic types (Smi, HeapNumbers, Strings)

@@ -178,7 +178,10 @@ class LChunkBuilder;
   V(UnaryMathOperation)                        \
   V(UnknownOSRValue)                           \
   V(UseConst)                                  \
-  V(ValueOf)
+  V(ValueOf)                                   \
+  V(UntaintWithFlag)                           \
+  V(Untaint)                                   \
+  V(TaintResult)
 
 #define GVN_FLAG_LIST(V)                       \
   V(Calls)                                     \
@@ -4347,6 +4350,63 @@ class HTypeof: public HTemplateInstruction<2> {
   }
 
   DECLARE_CONCRETE_INSTRUCTION(Typeof)
+};
+
+
+class HUntaintWithFlag: public HTemplateInstruction<1> {
+ public:
+  explicit HUntaintWithFlag(HValue* value) {
+    SetOperandAt(0, value);
+    set_representation(Representation::Tagged());
+  }
+
+  HValue* value() { return OperandAt(0); }
+
+  virtual void PrintDataTo(StringStream* stream);
+
+  virtual Representation RequiredInputRepresentation(int index) {
+    return Representation::Tagged();
+  }
+
+  DECLARE_CONCRETE_INSTRUCTION(UntaintWithFlag)
+};
+
+
+class HUntaint: public HTemplateInstruction<1> {
+ public:
+  explicit HUntaint(HValue* value) {
+    SetOperandAt(0, value);
+    set_representation(Representation::Tagged());
+  }
+
+  HValue* value() { return OperandAt(0); }
+
+  virtual void PrintDataTo(StringStream* stream);
+
+  virtual Representation RequiredInputRepresentation(int index) {
+    return Representation::Tagged();
+  }
+
+  DECLARE_CONCRETE_INSTRUCTION(Untaint)
+};
+
+
+class HTaintResult: public HTemplateInstruction<1> {
+ public:
+  explicit HTaintResult(HValue* value) {
+    SetOperandAt(0, value);
+    set_representation(Representation::Tagged());
+  }
+
+  HValue* value() { return OperandAt(0); }
+
+  virtual void PrintDataTo(StringStream* stream);
+
+  virtual Representation RequiredInputRepresentation(int index) {
+    return Representation::Tagged();
+  }
+
+  DECLARE_CONCRETE_INSTRUCTION(TaintResult)
 };
 
 

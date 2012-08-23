@@ -170,7 +170,10 @@ class LCodeGen;
   V(TypeofIsAndBranch)                          \
   V(UnaryMathOperation)                         \
   V(UnknownOSRValue)                            \
-  V(ValueOf)
+  V(ValueOf)                                    \
+  V(UntaintWithFlag)                            \
+  V(Untaint)                                    \
+  V(TaintResult)
 
 
 #define DECLARE_CONCRETE_INSTRUCTION(type, mnemonic)              \
@@ -1883,6 +1886,37 @@ class LCheckNonSmi: public LTemplateInstruction<0, 1, 0> {
   }
 
   DECLARE_CONCRETE_INSTRUCTION(CheckNonSmi, "check-non-smi")
+};
+
+
+class LUntaintWithFlag: public LTemplateInstruction<1, 1, 0> {
+ public:
+  explicit LUntaintWithFlag(LOperand* value) {
+    inputs_[0] = value;
+  }
+
+  DECLARE_CONCRETE_INSTRUCTION(UntaintWithFlag, "untaint-with-flag")
+};
+
+
+class LUntaint: public LTemplateInstruction<1, 1, 0> {
+ public:
+  explicit LUntaint(LOperand* value) {
+    inputs_[0] = value;
+  }
+
+  DECLARE_CONCRETE_INSTRUCTION(Untaint, "untaint")
+};
+
+
+class LTaintResult: public LTemplateInstruction<1, 1, 1> {
+ public:
+  explicit LTaintResult(LOperand* value, LOperand* temp) {
+    inputs_[0] = value;
+    temps_[0] = temp;
+  }
+
+  DECLARE_CONCRETE_INSTRUCTION(TaintResult, "taint-result")
 };
 
 

@@ -1652,6 +1652,26 @@ LInstruction* LChunkBuilder::DoCheckNonSmi(HCheckNonSmi* instr) {
 }
 
 
+LInstruction* LChunkBuilder::DoUntaintWithFlag(HUntaintWithFlag* instr) {
+  LOperand* value = UseRegisterAtStart(instr->value());
+  return DefineSameAsFirst(new LUntaintWithFlag(value));
+}
+
+
+LInstruction* LChunkBuilder::DoUntaint(HUntaint* instr) {
+  LOperand* value = UseRegisterAtStart(instr->value());
+  return DefineSameAsFirst(new LUntaint(value));
+}
+
+
+LInstruction* LChunkBuilder::DoTaintResult(HTaintResult* instr) {
+  LOperand* value = UseRegister(instr->value());
+  LOperand* temp = TempRegister();
+  LTaintResult* result = new LTaintResult(value, temp);
+  return AssignPointerMap(Define(result));
+}
+
+
 LInstruction* LChunkBuilder::DoCheckInstanceType(HCheckInstanceType* instr) {
   LOperand* value = UseRegisterAtStart(instr->value());
   LCheckInstanceType* result = new LCheckInstanceType(value);

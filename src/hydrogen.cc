@@ -5764,6 +5764,12 @@ HInstruction* HGraphBuilder::BuildBinaryOperation(BinaryOperation* expr,
     info = TypeInfo::Unknown();
   }
   HInstruction* instr = NULL;
+
+  if (info.IsTaint()) {
+    left = AddInstruction(new(zone()) HUntaintWithFlag(left));
+    right = AddInstruction(new(zone()) HUntaint(right));
+  }
+
   switch (expr->op()) {
     case Token::ADD:
       if (info.IsString()) {
@@ -5804,6 +5810,20 @@ HInstruction* HGraphBuilder::BuildBinaryOperation(BinaryOperation* expr,
       break;
     default:
       UNREACHABLE();
+  }
+
+  if (info.IsTaint()) {
+    info.UnsetTaint();
+    Representation rep = ToRepresentation(info);
+    // We only generate either int32 or generic tagged bitwise operations.
+    if (instr->IsBitwiseBinaryOperation() && rep.IsDouble()) {
+      rep = Representation::Integer32();
+    }
+    TraceRepresentation(expr->op(), info, instr, rep);
+    instr->AssumeRepresentation(rep);
+    HInstruction* temp = AddInstruction(instr);
+    instr = new(zone()) HTaintResult(temp);
+    info.SetTaint();
   }
 
   // If we hit an uninitialized binary op stub we will get type info
@@ -5985,6 +6005,7 @@ void HGraphBuilder::TraceRepresentation(Token::Value op,
 
 
 Representation HGraphBuilder::ToRepresentation(TypeInfo info) {
+  if (info.IsTaint()) return Representation::Tagged();
   if (info.IsSmi()) return Representation::Integer32();
   if (info.IsInteger32()) return Representation::Integer32();
   if (info.IsDouble()) return Representation::Double();

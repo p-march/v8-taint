@@ -793,6 +793,21 @@ void HTypeof::PrintDataTo(StringStream* stream) {
 }
 
 
+void HUntaintWithFlag::PrintDataTo(StringStream* stream) {
+  value()->PrintNameTo(stream);
+}
+
+
+void HUntaint::PrintDataTo(StringStream* stream) {
+  value()->PrintNameTo(stream);
+}
+
+
+void HTaintResult::PrintDataTo(StringStream* stream) {
+  value()->PrintNameTo(stream);
+}
+
+
 void HChange::PrintDataTo(StringStream* stream) {
   HUnaryOperation::PrintDataTo(stream);
   stream->Add(" %s to %s", from().Mnemonic(), to().Mnemonic());

@@ -3731,6 +3731,80 @@ void LCodeGen::DoCheckNonSmi(LCheckNonSmi* instr) {
 }
 
 
+void LCodeGen::DoUntaintWithFlag(LUntaintWithFlag* instr) {
+  LOperand* value = instr->InputAt(0);
+  __ ClearTaintFlag();
+  __ UntaintWithFlag(ToRegister(value));
+}
+
+
+void LCodeGen::DoUntaint(LUntaint* instr) {
+  LOperand* value = instr->InputAt(0);
+  __ UntaintWithFlag(ToRegister(value));
+}
+
+
+void LCodeGen::DoTaintResult(LTaintResult* instr) {
+  class DeferredTaintResult: public LDeferredCode {
+   public:
+    DeferredTaintResult(LCodeGen* codegen, LTaintResult* instr)
+        : LDeferredCode(codegen), instr_(instr) { }
+    virtual void Generate() { codegen()->DoDeferredTaintResult(instr_); }
+    virtual LInstruction* instr() { return instr_; }
+   private:
+    LTaintResult* instr_;
+  };
+
+
+  Register result = ToRegister(instr->result());
+  Register value = ToRegister(instr->InputAt(0));
+  Register temp = ToRegister(instr->TempAt(0));
+
+  ASSERT(!result.is(value));
+  ASSERT(!temp.is(value));
+  ASSERT(!temp.is(result));
+
+  Label done;
+  __ movq(result, value);
+  __ JumpIfTaintFlagNotSet(&done);
+
+#if DEBUG
+  Label primitive;
+  __ JumpIfSmi(value, &primitive);
+  __ CmpObjectType(value, FIRST_SPEC_OBJECT_TYPE, temp);
+  __ j(below, &primitive);
+  // NOTE(petr): no JSObjects should be returned by target stubs
+  __ Abort("Operand is a JSObject");
+  __ bind(&primitive);
+#endif
+
+  DeferredTaintResult* deferred = new DeferredTaintResult(this, instr);
+  if (FLAG_inline_new) {
+    __ AllocateTainted(result, temp, deferred->entry());
+  } else {
+    __ jmp(deferred->entry());
+  }
+  __ bind(deferred->exit());
+
+  __ movq(FieldOperand(result, Tainted::kObjectOffset), value);
+
+  __ bind(&done);
+}
+
+
+void LCodeGen::DoDeferredTaintResult(LTaintResult* instr) {
+  Register result = ToRegister(instr->result());
+
+  {
+    PushSafepointRegistersScope scope(this);
+    CallRuntimeFromDeferred(Runtime::kAllocateTainted, 0, instr);
+    // Ensure that value in rax survives popping registers.
+    __ movq(kScratchRegister, rax);
+  }
+  __ movq(result, kScratchRegister);
+}
+
+
 void LCodeGen::DoCheckInstanceType(LCheckInstanceType* instr) {
   Register input = ToRegister(instr->InputAt(0));
 

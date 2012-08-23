@@ -53,7 +53,7 @@ const int kMaxKeyedPolymorphism = 4;
 
 class TypeInfo {
  public:
-  TypeInfo() : type_(kUninitialized) { }
+  TypeInfo() : type_(kUninitialized), taint_(false) { }
 
   static TypeInfo Unknown() { return TypeInfo(kUnknown); }
   // We know it's a primitive type.
@@ -94,7 +94,9 @@ class TypeInfo {
 
   // Return the weakest (least precise) common type.
   static TypeInfo Combine(TypeInfo a, TypeInfo b) {
-    return TypeInfo(static_cast<Type>(a.type_ & b.type_));
+    TypeInfo result = TypeInfo(static_cast<Type>(a.type_ & b.type_));
+    result.taint_ = a.taint_ || b.taint_;
+    return result;
   }
 
 
@@ -116,7 +118,22 @@ class TypeInfo {
   static TypeInfo TypeFromValue(Handle<Object> value);
 
   bool Equals(const TypeInfo& other) {
-    return type_ == other.type_;
+    return type_ == other.type_ && taint_ == other.taint_;
+  }
+
+  inline void SetTaint() {
+    ASSERT(type_ != kUninitialized);
+    taint_ = true;
+  }
+
+  inline void UnsetTaint() {
+    ASSERT(type_ != kUninitialized);
+    taint_ = false;
+  }
+
+  inline bool IsTaint() {
+    ASSERT(type_ != kUninitialized);
+    return taint_;
   }
 
   inline bool IsUnknown() {
@@ -174,6 +191,20 @@ class TypeInfo {
   }
 
   const char* ToString() {
+    if (taint_) {
+      switch (type_) {
+        case kUnknown: return "TUnknown";
+        case kPrimitive: return "TPrimitive";
+        case kNumber: return "TNumber";
+        case kInteger32: return "TInteger32";
+        case kSmi: return "TSmi";
+        case kSymbol: return "TSymbol";
+        case kDouble: return "TDouble";
+        case kString: return "TString";
+        case kNonPrimitive: return "TObject";
+        case kUninitialized: return "TUninitialized";
+      }
+    }
     switch (type_) {
       case kUnknown: return "Unknown";
       case kPrimitive: return "Primitive";
@@ -203,9 +234,10 @@ class TypeInfo {
     kNonPrimitive = 0x40,  // 1000000
     kUninitialized = 0x7f  // 1111111
   };
-  explicit inline TypeInfo(Type t) : type_(t) { }
+  explicit inline TypeInfo(Type t) :type_(t), taint_(false) { }
 
   Type type_;
+  bool taint_;
 };
 
 
