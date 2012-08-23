@@ -1013,7 +1013,7 @@ MaybeObject* Object::TaintObject() {
   ASSERT(HeapObject::cast(clone)->map()->instance_type() != JS_GLOBAL_PROXY_TYPE);
   clone->ShortPrint(); printf("\n");
 #endif
-#if 1
+#if 0
   Object* constructor_name =
             JSFunction::cast(JSObject::cast(clone)->map()->constructor())->shared()->name();
   constructor_name->ShortPrint(); printf("\n");

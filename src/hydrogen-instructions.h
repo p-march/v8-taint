@@ -660,6 +660,12 @@ class HValue: public ZoneObject {
 
   // Printing support.
   virtual void PrintTo(StringStream* stream) = 0;
+  void Print() {
+    HeapStringAllocator string_allocator;
+    StringStream trace(&string_allocator);
+    PrintTo(&trace);
+    PrintF("%s", *trace.ToCString());
+  }
   void PrintNameTo(StringStream* stream);
   void PrintTypeTo(StringStream* stream);
   void PrintRangeTo(StringStream* stream);

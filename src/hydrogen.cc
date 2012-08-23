@@ -5469,10 +5469,24 @@ void HGraphBuilder::VisitTypeof(UnaryOperation* expr) {
 
 void HGraphBuilder::VisitAdd(UnaryOperation* expr) {
   CHECK_ALIVE(VisitForValue(expr->expression()));
+  TypeInfo info = oracle()->UnaryType(expr);
   HValue* value = Pop();
   HValue* context = environment()->LookupContext();
+
+  if (info.IsTaint()) {
+    value = AddInstruction(new(zone()) HUntaintWithFlag(value));
+  }
+
   HInstruction* instr =
       new(zone()) HMul(context, value, graph_->GetConstant1());
+
+  if (info.IsTaint()) {
+    HInstruction* temp = AddInstruction(instr);
+    if (instr->HasObservableSideEffects())
+      AddSimulate(expr->id());
+    instr = new(zone()) HTaintResult(temp);
+  }
+
   return ast_context()->ReturnInstruction(instr, expr->id());
 }
 
@@ -5481,17 +5495,32 @@ void HGraphBuilder::VisitSub(UnaryOperation* expr) {
   CHECK_ALIVE(VisitForValue(expr->expression()));
   HValue* value = Pop();
   HValue* context = environment()->LookupContext();
-  HInstruction* instr =
-      new(zone()) HMul(context, value, graph_->GetConstantMinus1());
   TypeInfo info = oracle()->UnaryType(expr);
-  if (info.IsUninitialized()) {
+
+  ASSERT(!(info.IsUninitialized() && info.IsTaint()));
+
+  if (info.IsTaint()) {
+    value = AddInstruction(new(zone()) HUntaintWithFlag(value));
+  } else if (info.IsUninitialized()) {
     AddInstruction(new(zone()) HSoftDeoptimize);
     current_block()->MarkAsDeoptimizing();
     info = TypeInfo::Unknown();
   }
-  Representation rep = ToRepresentation(info);
-  TraceRepresentation(expr->op(), info, instr, rep);
-  instr->AssumeRepresentation(rep);
+
+  HInstruction* instr =
+      new(zone()) HMul(context, value, graph_->GetConstantMinus1());
+  
+  if (info.IsTaint()) {
+    HInstruction* temp = AddInstruction(instr);
+    if (instr->HasObservableSideEffects())
+      AddSimulate(expr->id());
+    instr = new(zone()) HTaintResult(temp);
+  } else {
+    Representation rep = ToRepresentation(info);
+    TraceRepresentation(expr->op(), info, instr, rep);
+    instr->AssumeRepresentation(rep);
+  }
+
   return ast_context()->ReturnInstruction(instr, expr->id());
 }
 
@@ -5500,11 +5529,25 @@ void HGraphBuilder::VisitBitNot(UnaryOperation* expr) {
   CHECK_ALIVE(VisitForValue(expr->expression()));
   HValue* value = Pop();
   TypeInfo info = oracle()->UnaryType(expr);
-  if (info.IsUninitialized()) {
+
+  ASSERT(!(info.IsUninitialized() && info.IsTaint()));
+
+  if (info.IsTaint()) {
+    value = AddInstruction(new(zone()) HUntaintWithFlag(value));
+  } else if (info.IsUninitialized()) {
     AddInstruction(new(zone()) HSoftDeoptimize);
     current_block()->MarkAsDeoptimizing();
   }
+
   HInstruction* instr = new(zone()) HBitNot(value);
+
+  if (info.IsTaint()) {
+    HInstruction* temp = AddInstruction(instr);
+    if (instr->HasObservableSideEffects())
+      AddSimulate(expr->id());
+    instr = new(zone()) HTaintResult(temp);
+  }
+
   return ast_context()->ReturnInstruction(instr, expr->id());
 }
 
@@ -5822,6 +5865,8 @@ HInstruction* HGraphBuilder::BuildBinaryOperation(BinaryOperation* expr,
     TraceRepresentation(expr->op(), info, instr, rep);
     instr->AssumeRepresentation(rep);
     HInstruction* temp = AddInstruction(instr);
+    if (instr->HasObservableSideEffects())
+      AddSimulate(expr->id());
     instr = new(zone()) HTaintResult(temp);
     info.SetTaint();
   }

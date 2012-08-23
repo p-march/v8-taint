@@ -280,20 +280,32 @@ bool TypeFeedbackOracle::IsSymbolCompare(CompareOperation* expr) {
 
 TypeInfo TypeFeedbackOracle::UnaryType(UnaryOperation* expr) {
   Handle<Object> object = GetInfo(expr->id());
-  TypeInfo unknown = TypeInfo::Unknown();
-  if (!object->IsCode()) return unknown;
-  Handle<Code> code = Handle<Code>::cast(object);
+  TypeInfo result = TypeInfo::Unknown();
+  if (!object->IsCode()) return result;
+  bool is_taint = Code::cast(*object)->is_taint_wrapper_stub();
+  Code *code_ptr =
+    is_taint ? Code::cast(*object)->wrapped_stub() : Code::cast(*object);
+  Handle<Code> code(code_ptr);
   ASSERT(code->is_unary_op_stub());
   UnaryOpIC::TypeInfo type = static_cast<UnaryOpIC::TypeInfo>(
       code->unary_op_type());
   switch (type) {
     case UnaryOpIC::SMI:
-      return TypeInfo::Smi();
+      result = TypeInfo::Smi();
+      break;
     case UnaryOpIC::HEAP_NUMBER:
-      return TypeInfo::Double();
-    default:
-      return unknown;
+      result = TypeInfo::Double();
+      break;
+    case UnaryOpIC::UNINITIALIZED:
+    case UnaryOpIC::GENERIC:
+      break;
   }
+
+  if (is_taint) {
+    result.SetTaint();
+  }
+
+  return result;
 }
 
 
