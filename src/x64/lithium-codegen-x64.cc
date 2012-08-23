@@ -3767,6 +3767,7 @@ void LCodeGen::DoTaintResult(LTaintResult* instr) {
   Label done;
   __ movq(result, value);
   __ JumpIfTaintFlagNotSet(&done);
+  __ JumpIfTainted(result, &done);
 
 #if DEBUG
   Label primitive;

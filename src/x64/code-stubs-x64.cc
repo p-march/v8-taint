@@ -3512,6 +3512,7 @@ void TaintWrapperStub::Generate(MacroAssembler* masm) {
 
   Comment taint_result_comment(masm, "-- Taint result");
   __ JumpIfTaintFlagNotSet(&done);
+  __ JumpIfTainted(result, &done);
 
 #if DEBUG
   Label primitive;

@@ -660,6 +660,7 @@ class HValue: public ZoneObject {
 
   // Printing support.
   virtual void PrintTo(StringStream* stream) = 0;
+  // TODO(petr): get rid of the following method
   void Print() {
     HeapStringAllocator string_allocator;
     StringStream trace(&string_allocator);

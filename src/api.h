@@ -241,6 +241,12 @@ class Utils {
 
 template <class T>
 inline T* ToApi(v8::internal::Handle<v8::internal::Object> obj) {
+  if (!obj.is_null() && obj->IsTainted()) {
+    return reinterpret_cast<T*>(
+          reinterpret_cast<v8::internal::byte*>(*obj) + 
+          v8::internal::Tainted::kObjectOffset - v8::internal::kHeapObjectTag);
+
+  }
   return reinterpret_cast<T*>(obj.location());
 }
 
