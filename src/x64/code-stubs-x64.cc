@@ -3511,6 +3511,12 @@ void TaintWrapperStub::Generate(MacroAssembler* masm) {
   Label done, slow;
 
   Comment taint_result_comment(masm, "-- Taint result");
+  if (!FLAG_taint_result) {
+#ifndef TAINT_FLAG
+    __ pop(kScratchRegister); // pop taint flag from the stack
+#endif
+    __ jmp(&done);
+  }
   __ JumpIfTaintFlagNotSet(&done);
   __ JumpIfTainted(result, &done);
 
@@ -3518,13 +3524,13 @@ void TaintWrapperStub::Generate(MacroAssembler* masm) {
   Label primitive;
   __ JumpIfSmi(result, &primitive);
   __ CmpObjectType(result, FIRST_SPEC_OBJECT_TYPE, rcx);
-  __ j(below, &slow);
+  __ j(below, &primitive);
   // NOTE(petr): no JSObjects should be returned by target stubs
   __ Abort("Operand is a JSObject");
   __ bind(&primitive);
 #endif
 
-  __ AllocateTainted(rcx, rbx, &slow);
+  __ AllocateTainted(rcx, rbx, FLAG_taint_result_slow ? &slow : &done);
   __ movq(FieldOperand(rcx, Tainted::kObjectOffset), result);
   __ movq(result, rcx);
   __ jmp(&done);

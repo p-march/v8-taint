@@ -409,30 +409,39 @@ TypeInfo TypeFeedbackOracle::SwitchType(CaseClause* clause) {
 
 TypeInfo TypeFeedbackOracle::IncrementType(CountOperation* expr) {
   Handle<Object> object = GetInfo(expr->CountId());
-  TypeInfo unknown = TypeInfo::Unknown();
-  if (!object->IsCode()) return unknown;
-  Handle<Code> code = Handle<Code>::cast(object);
-  if (!code->is_binary_op_stub()) return unknown;
+  TypeInfo result = TypeInfo::Unknown();
+  if (!object->IsCode()) return result;
+  bool is_taint = Code::cast(*object)->is_taint_wrapper_stub();
+  Code *code_ptr =
+    is_taint ? Code::cast(*object)->wrapped_stub() : Code::cast(*object);
+  Handle<Code> code(code_ptr);
+  if (!code->is_binary_op_stub()) return result;
 
   BinaryOpIC::TypeInfo type = static_cast<BinaryOpIC::TypeInfo>(
       code->binary_op_type());
   switch (type) {
     case BinaryOpIC::UNINITIALIZED:
     case BinaryOpIC::SMI:
-      return TypeInfo::Smi();
+      result = TypeInfo::Smi();
+      break;
     case BinaryOpIC::INT32:
-      return TypeInfo::Integer32();
+      result = TypeInfo::Integer32();
+      break;
     case BinaryOpIC::HEAP_NUMBER:
-      return TypeInfo::Double();
+      result = TypeInfo::Double();
+      break;
+    case BinaryOpIC::ODDBALL:
     case BinaryOpIC::BOTH_STRING:
     case BinaryOpIC::STRING:
     case BinaryOpIC::GENERIC:
-      return unknown;
-    default:
-      return unknown;
+      break;
   }
-  UNREACHABLE();
-  return unknown;
+
+  if (is_taint) {
+    result.SetTaint();
+  }
+
+  return result;
 }
 
 

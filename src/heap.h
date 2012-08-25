@@ -159,7 +159,12 @@ inline Heap* _inline_get_heap_();
   V(Smi, real_stack_limit, RealStackLimit)                                     \
   V(StringDictionary, intrinsic_function_names, IntrinsicFunctionNames)        \
 /* #ifdef TAINT_FLAG */                                                        \
+/* TODO(petr): get rid of taint flags as they do not work */                   \
+/* they do not work when taint-enabled code called recursevly */               \
   V(Smi, taint_flag, TaintFlag)                                                \
+/* #ifdef DEBUG* */                                                            \
+  V(Smi, taint_flag_check, TaintFlagCheck)                                     \
+/* #endif */                                                                   \
 /* #endif */                                                                   \
 
 #define ROOT_LIST(V)                                  \

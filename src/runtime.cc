@@ -13579,6 +13579,15 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_Abort) {
 }
 
 
+RUNTIME_FUNCTION(MaybeObject*, Runtime_Info) {
+  ASSERT_IF_TAINTED_ARGS();
+  ASSERT(args.length() == 2);
+  PrintF("info: %s\n",
+         reinterpret_cast<char*>(args[0]) + args.smi_at(1));
+  return isolate->heap()->undefined_value();
+}
+
+
 RUNTIME_FUNCTION(MaybeObject*, Runtime_GetFromCache) {
   ASSERT_IF_TAINTED_ARGS();
   // This is only called from codegen, so checks might be more lax.

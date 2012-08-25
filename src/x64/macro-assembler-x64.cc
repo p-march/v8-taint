@@ -538,6 +538,42 @@ void MacroAssembler::Abort(const char* msg) {
 }
 
 
+void MacroAssembler::Info(const char* msg) {
+  // We want to pass the msg string like a smi to avoid GC
+  // problems, however msg is not guaranteed to be aligned
+  // properly. Instead, we pass an aligned pointer that is
+  // a proper v8 smi, but also pass the alignment difference
+  // from the real pointer as a smi.
+  intptr_t p1 = reinterpret_cast<intptr_t>(msg);
+  intptr_t p0 = (p1 & ~kSmiTagMask) + kSmiTag;
+  // Note: p0 might not be a valid Smi *value*, but it has a valid Smi tag.
+  ASSERT(reinterpret_cast<Object*>(p0)->IsSmi());
+#ifdef DEBUG
+  if (msg != NULL) {
+    RecordComment("Info message: ");
+    RecordComment(msg);
+  }
+#endif
+  Pushad();
+  movq(kScratchRegister, p0, RelocInfo::NONE);
+  push(kScratchRegister);
+  movq(kScratchRegister,
+       reinterpret_cast<intptr_t>(Smi::FromInt(static_cast<int>(p1 - p0))),
+       RelocInfo::NONE);
+  push(kScratchRegister);
+
+ if (!has_frame_) {
+    // We don't actually want to generate a pile of code for this, so just
+    // claim there is a stack frame, without generating one.
+    FrameScope scope(this, StackFrame::NONE);
+    CallRuntime(Runtime::kInfo, 2);
+  } else {
+    CallRuntime(Runtime::kInfo, 2);
+  }
+  Popad();
+}
+
+
 void MacroAssembler::CallStub(CodeStub* stub, unsigned ast_id) {
   ASSERT(AllowThisStubCall(stub));  // Calls are not allowed in some stubs
   Call(stub->GetCode(), RelocInfo::CODE_TARGET, ast_id);
@@ -3744,12 +3780,19 @@ void MacroAssembler::Untaint(Register src) {
 
 
 void MacroAssembler::UntaintWithFlag(Register src) {
+#if DEBUG && TAINT_FLAG
+  Label ok;
+  CompareRoot(Smi::FromInt(1), Heap::kTaintFlagCheckRootIndex);
+  j(equal, &ok, Label::kNear);
+  Abort("UntaintWithFlag: flag check failed");
+  bind(&ok);
+#endif
   Label not_tainted;
   Condition smi = CheckSmi(src);
   j(smi, &not_tainted, Label::kNear);
   Condition tainted = CheckTainted(src);
   j(NegateCondition(tainted), &not_tainted, Label::kNear);
-#if 1 || TAINT_FLAG
+#ifdef TAINT_FLAG
   StoreRoot(Smi::FromInt(1), Heap::kTaintFlagRootIndex);
 #else
   Move(Operand(rsp, 0), Smi::FromInt(1));
@@ -3760,7 +3803,16 @@ void MacroAssembler::UntaintWithFlag(Register src) {
 
 
 void MacroAssembler::ClearTaintFlag() {
-#if 1 || TAINT_FLAG
+#ifdef TAINT_FLAG
+#ifdef DEBUG
+  Info("Taint+");
+  Label ok;
+  CompareRoot(Smi::FromInt(0), Heap::kTaintFlagCheckRootIndex);
+  j(equal, &ok, Label::kNear);
+  Abort("ClearTaintFlag: flag check failed");
+  bind(&ok);
+  StoreRoot(Smi::FromInt(1), Heap::kTaintFlagCheckRootIndex);
+#endif
   StoreRoot(Smi::FromInt(0), Heap::kTaintFlagRootIndex);
 #else
   Push(Smi::FromInt(0));
@@ -3769,7 +3821,16 @@ void MacroAssembler::ClearTaintFlag() {
 
 
 void MacroAssembler::JumpIfTaintFlagNotSet(Label* not_set) {
-#if 1 || TAINT_FLAG
+#ifdef TAINT_FLAG
+#ifdef DEBUG
+  Info("Taint-");
+  Label ok;
+  CompareRoot(Smi::FromInt(1), Heap::kTaintFlagCheckRootIndex);
+  j(equal, &ok, Label::kNear);
+  Abort("JumpIfTaintFlagNotSet: flag check failed");
+  bind(&ok);
+  StoreRoot(Smi::FromInt(0), Heap::kTaintFlagCheckRootIndex);
+#endif
   CompareRoot(Smi::FromInt(0), Heap::kTaintFlagRootIndex);
 #else
   pop(kScratchRegister);

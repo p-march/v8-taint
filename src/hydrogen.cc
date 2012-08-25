@@ -5510,15 +5510,15 @@ void HGraphBuilder::VisitSub(UnaryOperation* expr) {
   HInstruction* instr =
       new(zone()) HMul(context, value, graph_->GetConstantMinus1());
   
+  Representation rep = ToRepresentation(info);
+  TraceRepresentation(expr->op(), info, instr, rep);
+  instr->AssumeRepresentation(rep);
+
   if (info.IsTaint()) {
     HInstruction* temp = AddInstruction(instr);
     if (instr->HasObservableSideEffects())
       AddSimulate(expr->id());
     instr = new(zone()) HTaintResult(temp);
-  } else {
-    Representation rep = ToRepresentation(info);
-    TraceRepresentation(expr->op(), info, instr, rep);
-    instr->AssumeRepresentation(rep);
   }
 
   return ast_context()->ReturnInstruction(instr, expr->id());
@@ -5601,6 +5601,8 @@ HInstruction* HGraphBuilder::BuildIncrement(bool returns_original_input,
   // The input to the count operation is on top of the expression stack.
   TypeInfo info = oracle()->IncrementType(expr);
   Representation rep = ToRepresentation(info);
+  HValue* value = NULL;
+
   if (rep.IsTagged()) {
     rep = Representation::Integer32();
   }
@@ -5610,9 +5612,19 @@ HInstruction* HGraphBuilder::BuildIncrement(bool returns_original_input,
     // actual HChange instruction we need is (sometimes) added in a later
     // phase, so it is not available now to be used as an input to HAdd and
     // as the return value.
-    HInstruction* number_input = new(zone()) HForceRepresentation(Pop(), rep);
+    value = Pop();
+    if (info.IsTaint()) {
+      value = AddInstruction(new(zone()) HUntaintWithFlag(value));
+    }
+    HInstruction* number_input = new(zone()) HForceRepresentation(value, rep);
     AddInstruction(number_input);
     Push(number_input);
+    value = Top();
+  } else {
+    value = Top();
+    if (info.IsTaint()) {
+      value = AddInstruction(new(zone()) HUntaintWithFlag(value));
+    }
   }
 
   // The addition has no side effects, so we do not need
@@ -5622,9 +5634,19 @@ HInstruction* HGraphBuilder::BuildIncrement(bool returns_original_input,
       ? graph_->GetConstant1()
       : graph_->GetConstantMinus1();
   HValue* context = environment()->LookupContext();
-  HInstruction* instr = new(zone()) HAdd(context, Top(), delta);
+
+  HInstruction* instr = new(zone()) HAdd(context, value, delta);
+
   TraceRepresentation(expr->op(), info, instr, rep);
   instr->AssumeRepresentation(rep);
+
+  if (info.IsTaint()) {
+    HInstruction* temp = AddInstruction(instr);
+    if (instr->HasObservableSideEffects())
+      AddSimulate(expr->id());
+    instr = new(zone()) HTaintResult(temp);
+  }
+
   AddInstruction(instr);
   return instr;
 }
@@ -5809,8 +5831,16 @@ HInstruction* HGraphBuilder::BuildBinaryOperation(BinaryOperation* expr,
   HInstruction* instr = NULL;
 
   if (info.IsTaint()) {
-    left = AddInstruction(new(zone()) HUntaintWithFlag(left));
-    right = AddInstruction(new(zone()) HUntaint(right));
+    if (!left->IsConstant()) {
+      left = AddInstruction(new(zone()) HUntaintWithFlag(left));
+      if (!right->IsConstant()) {
+        right = AddInstruction(new(zone()) HUntaint(right));
+      }
+    } else {
+      if (!right->IsConstant()) {
+        right = AddInstruction(new(zone()) HUntaintWithFlag(right));
+      }
+    }    
   }
 
   switch (expr->op()) {
@@ -5855,8 +5885,12 @@ HInstruction* HGraphBuilder::BuildBinaryOperation(BinaryOperation* expr,
       UNREACHABLE();
   }
 
-  if (info.IsTaint()) {
-    info.UnsetTaint();
+  // If we hit an uninitialized binary op stub we will get type info
+  // for a smi operation. If one of the operands is a constant string
+  // do not generate code assuming it is a smi operation.
+  if (!(info.IsSmi() &&
+        ((left->IsConstant() && HConstant::cast(left)->HasStringValue()) ||
+         (right->IsConstant() && HConstant::cast(right)->HasStringValue())))) {
     Representation rep = ToRepresentation(info);
     // We only generate either int32 or generic tagged bitwise operations.
     if (instr->IsBitwiseBinaryOperation() && rep.IsDouble()) {
@@ -5864,6 +5898,9 @@ HInstruction* HGraphBuilder::BuildBinaryOperation(BinaryOperation* expr,
     }
     TraceRepresentation(expr->op(), info, instr, rep);
     instr->AssumeRepresentation(rep);
+  }
+
+  if (info.IsTaint()) {
     HInstruction* temp = AddInstruction(instr);
     if (instr->HasObservableSideEffects())
       AddSimulate(expr->id());
@@ -5871,21 +5908,6 @@ HInstruction* HGraphBuilder::BuildBinaryOperation(BinaryOperation* expr,
     info.SetTaint();
   }
 
-  // If we hit an uninitialized binary op stub we will get type info
-  // for a smi operation. If one of the operands is a constant string
-  // do not generate code assuming it is a smi operation.
-  if (info.IsSmi() &&
-      ((left->IsConstant() && HConstant::cast(left)->HasStringValue()) ||
-       (right->IsConstant() && HConstant::cast(right)->HasStringValue()))) {
-    return instr;
-  }
-  Representation rep = ToRepresentation(info);
-  // We only generate either int32 or generic tagged bitwise operations.
-  if (instr->IsBitwiseBinaryOperation() && rep.IsDouble()) {
-    rep = Representation::Integer32();
-  }
-  TraceRepresentation(expr->op(), info, instr, rep);
-  instr->AssumeRepresentation(rep);
   return instr;
 }
 
@@ -6050,7 +6072,6 @@ void HGraphBuilder::TraceRepresentation(Token::Value op,
 
 
 Representation HGraphBuilder::ToRepresentation(TypeInfo info) {
-  if (info.IsTaint()) return Representation::Tagged();
   if (info.IsSmi()) return Representation::Integer32();
   if (info.IsInteger32()) return Representation::Integer32();
   if (info.IsDouble()) return Representation::Double();

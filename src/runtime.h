@@ -345,6 +345,7 @@ namespace internal {
   F(TraceEnter, 0, 1) \
   F(TraceExit, 1, 1) \
   F(Abort, 2, 1) \
+  F(Info, 2, 1) \
   /* Logging */ \
   F(Log, 2, 1) \
   /* ES5 */ \

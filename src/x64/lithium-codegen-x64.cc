@@ -3766,6 +3766,12 @@ void LCodeGen::DoTaintResult(LTaintResult* instr) {
 
   Label done;
   __ movq(result, value);
+  if (!FLAG_taint_result) {
+#ifndef TAINT_FLAG
+    __ pop(kScratchRegister); // pop taint flag from the stack
+#endif
+    __ jmp(&done);
+  }
   __ JumpIfTaintFlagNotSet(&done);
   __ JumpIfTainted(result, &done);
 
@@ -3781,7 +3787,9 @@ void LCodeGen::DoTaintResult(LTaintResult* instr) {
 
   DeferredTaintResult* deferred = new DeferredTaintResult(this, instr);
   if (FLAG_inline_new) {
-    __ AllocateTainted(result, temp, deferred->entry());
+    __ AllocateTainted(result,
+                       temp,
+                       FLAG_taint_result_slow ? deferred->entry() : &done);
   } else {
     __ jmp(deferred->entry());
   }

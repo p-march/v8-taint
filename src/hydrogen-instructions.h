@@ -4363,6 +4363,7 @@ class HTypeof: public HTemplateInstruction<2> {
 class HUntaintWithFlag: public HTemplateInstruction<1> {
  public:
   explicit HUntaintWithFlag(HValue* value) {
+    ASSERT(!value->IsConstant());
     SetOperandAt(0, value);
     set_representation(Representation::Tagged());
   }

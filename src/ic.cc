@@ -2238,7 +2238,8 @@ RUNTIME_FUNCTION(MaybeObject*, UnaryOp_Patch) {
     }
     UnaryOpIC ic(isolate);
     if (previous_taint_mode) {
-#if 1 || TAINT_FLAG
+#ifdef TAINT_FLAG
+      // TODO(petr): replace with constant
       ic.advance_pc(6 * kPointerSize);
 #else
       ic.advance_pc(7 * kPointerSize);
@@ -2329,7 +2330,8 @@ RUNTIME_FUNCTION(MaybeObject*, BinaryOp_Patch) {
     }
     BinaryOpIC ic(isolate);
     if (previous_taint_mode) {
-#if 1 || TAINT_FLAG
+#ifdef TAINT_FLAG
+      // TODO(petr): replace with constant
       ic.advance_pc(7 * kPointerSize);
 #else
       ic.advance_pc(8 * kPointerSize);

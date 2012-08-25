@@ -1667,8 +1667,9 @@ LInstruction* LChunkBuilder::DoUntaint(HUntaint* instr) {
 LInstruction* LChunkBuilder::DoTaintResult(HTaintResult* instr) {
   LOperand* value = UseRegister(instr->value());
   LOperand* temp = TempRegister();
+  LUnallocated* result_temp = TempRegister();
   LTaintResult* result = new LTaintResult(value, temp);
-  return AssignPointerMap(Define(result));
+  return AssignPointerMap(Define(result, result_temp));
 }
 
 
