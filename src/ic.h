@@ -75,6 +75,11 @@ class IC {
     kUtilityCount
   };
 
+  enum TaintWrapperFlag {
+    NO_TAINT_WRAPPER = 0,
+    TAINT_WRAPPER = 1
+  };
+
   // Looks up the address of the named utility.
   static Address AddressFromUtilityId(UtilityId id);
 
@@ -90,7 +95,9 @@ class IC {
 
   // Construct the IC structure with the given number of extra
   // JavaScript frames on the stack.
-  IC(FrameDepth depth, Isolate* isolate);
+  IC(FrameDepth depth,
+     Isolate* isolate,
+     TaintWrapperFlag taint = NO_TAINT_WRAPPER);
   virtual ~IC() {}
 
   // Get the call-site target; used for determining the state.
@@ -150,8 +157,18 @@ class IC {
   Address OriginalCodeAddress() const;
 #endif
 
+  virtual Handle<Code> GetTaintWrapper(Handle<Code> target) {
+    UNIMPLEMENTED();
+    return Handle<Code>();
+  }
+
   // Set the call-site target.
-  void set_target(Code* code) { SetTargetAtAddress(address(), code); }
+  void set_target(Code* code) {
+    if (FLAG_use_taint_spec && taint_flag_ == TAINT_WRAPPER) {
+      code = *GetTaintWrapper(Handle<Code>(code));
+    }
+    SetTargetAtAddress(address(), code);
+  }
 
 #ifdef DEBUG
   char TransitionMarkFromState(IC::State state);
@@ -182,6 +199,8 @@ class IC {
   Address* pc_address_;
 
   Isolate* isolate_;
+
+  TaintWrapperFlag taint_flag_;
 
   DISALLOW_IMPLICIT_CONSTRUCTORS(IC);
 };
@@ -325,7 +344,8 @@ class KeyedCallIC: public CallICBase {
 
 class LoadIC: public IC {
  public:
-  explicit LoadIC(Isolate* isolate) : IC(NO_EXTRA_FRAME, isolate) {
+  explicit LoadIC(Isolate* isolate, TaintWrapperFlag flag)
+      : IC(NO_EXTRA_FRAME, isolate, flag) {
     ASSERT(target()->is_load_stub());
   }
 
@@ -350,6 +370,8 @@ class LoadIC: public IC {
   static void GenerateFunctionPrototype(MacroAssembler* masm);
 
  private:
+  virtual Handle<Code> GetTaintWrapper(Handle<Code> target);
+
   // Update the inline cache and the global stub cache based on the
   // lookup result.
   void UpdateCaches(LookupResult* lookup,
@@ -384,7 +406,8 @@ class KeyedIC: public IC {
     STORE_TRANSITION_SMI_TO_DOUBLE,
     STORE_TRANSITION_DOUBLE_TO_OBJECT
   };
-  explicit KeyedIC(Isolate* isolate) : IC(NO_EXTRA_FRAME, isolate) {}
+  explicit KeyedIC(Isolate* isolate, TaintWrapperFlag flag)
+    : IC(NO_EXTRA_FRAME, isolate, flag) {}
   virtual ~KeyedIC() {}
 
   virtual Handle<Code> GetElementStubWithoutMapCheck(
@@ -429,7 +452,8 @@ class KeyedIC: public IC {
 
 class KeyedLoadIC: public KeyedIC {
  public:
-  explicit KeyedLoadIC(Isolate* isolate) : KeyedIC(isolate) {
+  explicit KeyedLoadIC(Isolate* isolate, TaintWrapperFlag flag)
+      : KeyedIC(isolate, flag) {
     ASSERT(target()->is_keyed_load_stub());
   }
 
@@ -479,6 +503,8 @@ class KeyedLoadIC: public KeyedIC {
   }
 
  private:
+  virtual Handle<Code> GetTaintWrapper(Handle<Code> target);
+
   // Update the inline cache.
   void UpdateCaches(LookupResult* lookup,
                     State state,
@@ -514,7 +540,8 @@ class KeyedLoadIC: public KeyedIC {
 
 class StoreIC: public IC {
  public:
-  explicit StoreIC(Isolate* isolate) : IC(NO_EXTRA_FRAME, isolate) {
+  explicit StoreIC(Isolate* isolate, TaintWrapperFlag flag)
+      : IC(NO_EXTRA_FRAME, isolate, flag) {
     ASSERT(target()->is_store_stub());
   }
 
@@ -535,6 +562,8 @@ class StoreIC: public IC {
                                   StrictModeFlag strict_mode);
 
  private:
+  virtual Handle<Code> GetTaintWrapper(Handle<Code> target);
+
   // Update the inline cache and the global stub cache based on the
   // lookup result.
   void UpdateCaches(LookupResult* lookup,
@@ -583,7 +612,8 @@ class StoreIC: public IC {
 
 class KeyedStoreIC: public KeyedIC {
  public:
-  explicit KeyedStoreIC(Isolate* isolate) : KeyedIC(isolate) {
+  explicit KeyedStoreIC(Isolate* isolate, TaintWrapperFlag flag)
+      : KeyedIC(isolate, flag) {
     ASSERT(target()->is_keyed_store_stub());
   }
 
@@ -622,7 +652,9 @@ class KeyedStoreIC: public KeyedIC {
   virtual Handle<Code> ComputePolymorphicStub(MapHandleList* receiver_maps,
                                               StrictModeFlag strict_mode);
 
-  private:
+ private:
+  virtual Handle<Code> GetTaintWrapper(Handle<Code> target);
+
   // Update the inline cache.
   void UpdateCaches(LookupResult* lookup,
                     State state,

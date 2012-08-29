@@ -1006,9 +1006,6 @@ MaybeObject* Object::TaintObject() {
          //TypeToString(HeapObject::cast(clone)->map()->instance_type()) : "smi",
          //(void*) this, (void*)clone, space);
 
-  if (JS_ARRAY_TYPE == HeapObject::cast(clone)->map()->instance_type()) {
-    printf("here\n");
-  }
 #if 0
   ASSERT(HeapObject::cast(clone)->map()->instance_type() != JS_GLOBAL_PROXY_TYPE);
   clone->ShortPrint(); printf("\n");

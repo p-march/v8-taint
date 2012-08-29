@@ -1172,6 +1172,74 @@ void StubCompiler::GenerateLoadInterceptor(Handle<JSObject> object,
 }
 
 
+Handle<Code> StubCompiler::GenerateTaintWrapper(Handle<Code> target,
+                                                bool taint_result,
+                                                Register receiver,
+                                                Register scratch1,
+                                                Register scratch2) {
+  Comment untaint_comment(masm(), "-- Untaint receiver");
+
+  if (taint_result) {
+    __ ClearTaintFlag();
+    __ UntaintWithFlag(receiver);
+  } else {
+    __ Untaint(receiver);
+  }
+
+  ASSERT(!target.is_null());
+  __ Call(target, RelocInfo::CODE_TARGET, kNoASTId);
+  // This nop is to allow repatching of the target stub
+  __ nop();
+
+  if (taint_result) {
+    Label done;
+    Register result = rax;
+    Comment taint_comment(masm(), "-- Taint result");
+
+    if (!FLAG_taint_result) {
+#ifndef TAINT_FLAG
+      __ pop(kScratchRegister); // pop taint flag from the stack
+#endif
+      __ jmp(&done);
+    }
+
+    __ JumpIfTaintFlagNotSet(&done);
+#ifdef DEBUG
+    {
+      Label ok;
+      __ JumpIfNotTainted(result, &ok, Label::kNear);
+      __ Abort("StubCompiler: result should not be tainted");
+      __ bind(&ok);
+    }
+#endif
+
+    Label primitive, slow;
+    __ JumpIfSmi(result, &primitive, Label::kNear);
+    __ CmpObjectType(result, FIRST_SPEC_OBJECT_TYPE, scratch1);
+    __ j(above_equal, FLAG_taint_result_slow ? &slow : &done);
+    __ bind(&primitive);
+
+    __ AllocateTainted(scratch1, scratch2, FLAG_taint_result_slow ? &slow : &done);
+    __ movq(FieldOperand(scratch1, Tainted::kObjectOffset), result);
+    __ movq(result, scratch1);
+    __ jmp(&done);
+
+    __ bind(&slow);
+    {
+      FrameScope scope(masm(), StackFrame::INTERNAL);
+      __ push(result);
+      __ CallRuntime(Runtime::kTaint, 1);
+    }
+
+    __ bind(&done);
+  }
+
+  __ ret(0);
+
+  return GetTaintWrapperCode(target);
+}
+
+
 void CallStubCompiler::GenerateNameCheck(Handle<String> name, Label* miss) {
   if (kind_ == Code::KEYED_CALL_IC) {
     __ Cmp(rcx, name);
@@ -2404,6 +2472,26 @@ Handle<Code> StoreStubCompiler::CompileStoreGlobal(
 }
 
 
+Handle<Code> StoreStubCompiler::CompileTaintWrapper(Handle<Code> target) {
+  // ----------- S t a t e -------------
+  //  -- rax    : value
+  //  -- rcx    : name
+  //  -- rdx    : receiver
+  //  -- rsp[0] : return address
+  // -----------------------------------
+
+#ifdef DEBUG
+  Register name = rcx;
+  Label ok;
+  __ JumpIfNotTainted(name, &ok, Label::kNear);
+  __ Abort("StoreStubCompiler: name should not be tainted");
+  __ bind(&ok);
+#endif
+  
+  return GenerateTaintWrapper(target, false, rdx, rbx, rdi);
+}
+
+
 Handle<Code> KeyedStoreStubCompiler::CompileStoreField(Handle<JSObject> object,
                                                        int index,
                                                        Handle<Map> transition,
@@ -2499,6 +2587,26 @@ Handle<Code> KeyedStoreStubCompiler::CompileStorePolymorphic(
 }
 
 
+Handle<Code> KeyedStoreStubCompiler::CompileTaintWrapper(Handle<Code> target) {
+  // ----------- S t a t e -------------
+  //  -- rax    : value
+  //  -- rcx    : key
+  //  -- rdx    : receiver
+  //  -- rsp[0] : return address
+  // -----------------------------------
+
+#ifdef DEBUG
+  Register key = rcx;
+  Label ok;
+  __ JumpIfNotTainted(key, &ok, Label::kNear);
+  __ Abort("KeyedStoreStubCompiler: key should not be tainted");
+  __ bind(&ok);
+#endif
+  
+  return GenerateTaintWrapper(target, false, rdx, rbx, rdi);
+}
+
+
 Handle<Code> LoadStubCompiler::CompileLoadNonexistent(Handle<String> name,
                                                       Handle<JSObject> object,
                                                       Handle<JSObject> last) {
@@ -2534,6 +2642,25 @@ Handle<Code> LoadStubCompiler::CompileLoadNonexistent(Handle<String> name,
 
   // Return the generated code.
   return GetCode(NONEXISTENT, factory()->empty_string());
+}
+
+
+Handle<Code> LoadStubCompiler::CompileTaintWrapper(Handle<Code> target) {
+  // ----------- S t a t e -------------
+  //  -- rax    : receiver
+  //  -- rcx    : name
+  //  -- rsp[0] : return address
+  // -----------------------------------
+
+#ifdef DEBUG
+  Register name = rcx;
+  Label ok;
+  __ JumpIfNotTainted(name, &ok, Label::kNear);
+  __ Abort("LoadStubCompiler: name should not be tainted");
+  __ bind(&ok);
+#endif
+  
+  return GenerateTaintWrapper(target, true, rax, rbx, rdx);
 }
 
 
@@ -3042,6 +3169,25 @@ Handle<Code> ConstructStubCompiler::CompileConstructStub(
 
   // Return the generated code.
   return GetCode();
+}
+
+
+Handle<Code> KeyedLoadStubCompiler::CompileTaintWrapper(Handle<Code> target) {
+  // ----------- S t a t e -------------
+  //  -- rax    : key
+  //  -- rdx    : receiver
+  //  -- rsp[0] : return address
+  // -----------------------------------
+
+#ifdef DEBUG
+  Register key = rax;
+  Label ok;
+  __ JumpIfNotTainted(key, &ok, Label::kNear);
+  __ Abort("KeyedLoadStubCompiler: key should not be tainted");
+  __ bind(&ok);
+#endif
+
+  return GenerateTaintWrapper(target, true, rdx, rbx, rcx);
 }
 
 

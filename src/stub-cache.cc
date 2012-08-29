@@ -1518,6 +1518,14 @@ Handle<Code> StubCompiler::GetCodeWithFlags(Code::Flags flags,
 }
 
 
+Handle<Code> StubCompiler::GetTaintWrapperCode(Handle<Code> target) {
+  Code::Flags flags = Code::ComputeFlags(Code::TAINT_WRAPPER_IC);
+  Handle<Code> code = GetCodeWithFlags(flags, "Taint Wrapper");
+  code->set_wrapped_stub(*target);
+  return code;
+}
+
+
 void StubCompiler::LookupPostInterceptor(Handle<JSObject> holder,
                                          Handle<String> name,
                                          LookupResult* lookup) {

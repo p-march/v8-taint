@@ -4078,7 +4078,7 @@ class Code: public HeapObject {
   inline byte to_boolean_state();
   inline void set_to_boolean_state(byte value);
 
-  // [wrapped_stub]: For kind TAINT_WRAPPER_IC telss what stub it wrapps.
+  // [wrapped_stub]: For kind TAINT_WRAPPER_IC tells what stub it wrapps.
   inline Code* wrapped_stub();
   inline void set_wrapped_stub(Code* value);
 

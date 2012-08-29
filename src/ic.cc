@@ -105,7 +105,9 @@ void IC::TraceIC(const char* type,
 #define TRACE_IC(type, name, old_state, new_target)             \
   ASSERT((TraceIC(type, name, old_state, new_target), true))
 
-IC::IC(FrameDepth depth, Isolate* isolate) : isolate_(isolate) {
+IC::IC(FrameDepth depth, Isolate* isolate, TaintWrapperFlag taint)
+    : isolate_(isolate),
+      taint_flag_(taint) {
   ASSERT(isolate == Isolate::Current());
   // To improve the performance of the (much used) IC code, we unfold
   // a few levels of the stack frame iteration code. This yields a
@@ -895,6 +897,13 @@ MaybeObject* LoadIC::Load(State state,
 }
 
 
+Handle<Code> LoadIC::GetTaintWrapper(Handle<Code> target) {
+  LoadStubCompiler compiler(isolate());
+  Handle<Code> code = compiler.CompileTaintWrapper(target);
+  return code;
+}
+
+
 void LoadIC::UpdateCaches(LookupResult* lookup,
                           State state,
                           Handle<Object> object,
@@ -1155,6 +1164,13 @@ MaybeObject* KeyedLoadIC::Load(State state,
 }
 
 
+Handle<Code> KeyedLoadIC::GetTaintWrapper(Handle<Code> target) {
+  KeyedLoadStubCompiler compiler(isolate());
+  Handle<Code> code = compiler.CompileTaintWrapper(target);
+  return code;
+}
+
+
 void KeyedLoadIC::UpdateCaches(LookupResult* lookup,
                                State state,
                                Handle<Object> object,
@@ -1350,6 +1366,13 @@ MaybeObject* StoreIC::Store(State state,
 
   // Set the property.
   return receiver->SetProperty(*name, *value, NONE, strict_mode);
+}
+
+
+Handle<Code> StoreIC::GetTaintWrapper(Handle<Code> target) {
+  StoreStubCompiler compiler(isolate());
+  Handle<Code> code = compiler.CompileTaintWrapper(target);
+  return code;
 }
 
 
@@ -1734,6 +1757,13 @@ MaybeObject* KeyedStoreIC::Store(State state,
 }
 
 
+Handle<Code> KeyedStoreIC::GetTaintWrapper(Handle<Code> target) {
+  KeyedStoreStubCompiler compiler(isolate());
+  Handle<Code> code = compiler.CompileTaintWrapper(target);
+  return code;
+}
+
+
 void KeyedStoreIC::UpdateCaches(LookupResult* lookup,
                                 State state,
                                 StrictModeFlag strict_mode,
@@ -1866,10 +1896,11 @@ RUNTIME_FUNCTION(MaybeObject*, KeyedCallIC_Miss) {
 
 // Used from ic-<arch>.cc.
 RUNTIME_FUNCTION(MaybeObject*, LoadIC_Miss) {
-  UNTAINT_ALL_ARGS();
+  UNTAINT_ARGS(1);
+  ASSERT_IF_TAINTED_ARG(1);
   HandleScope scope(isolate);
   ASSERT(args.length() == 2);
-  LoadIC ic(isolate);
+  LoadIC ic(isolate, static_cast<IC::TaintWrapperFlag>(HAS_TAINTED_ARGS()));
   bool taint_policy;
   IC::State state = IC::StateFrom(ic.target(), args[0], args[1]);
   MaybeObject* result = ic.Load(state, args.at<Object>(0), args.at<String>(1), &taint_policy);
@@ -1885,10 +1916,11 @@ RUNTIME_FUNCTION(MaybeObject*, LoadIC_Miss) {
 
 // Used from ic-<arch>.cc
 RUNTIME_FUNCTION(MaybeObject*, KeyedLoadIC_Miss) {
-  UNTAINT_ALL_ARGS();
+  UNTAINT_ARGS(1);
+  ASSERT_IF_TAINTED_ARG(1);
   HandleScope scope(isolate);
   ASSERT(args.length() == 2);
-  KeyedLoadIC ic(isolate);
+  KeyedLoadIC ic(isolate, static_cast<IC::TaintWrapperFlag>(HAS_TAINTED_ARGS()));
   IC::State state = IC::StateFrom(ic.target(), args[0], args[1]);
   bool taint_policy;
   MaybeObject* result;
@@ -1901,10 +1933,11 @@ RUNTIME_FUNCTION(MaybeObject*, KeyedLoadIC_Miss) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, KeyedLoadIC_MissForceGeneric) {
-  UNTAINT_ALL_ARGS();
+  UNTAINT_ARGS(1);
+  ASSERT_IF_TAINTED_ARG(1);
   HandleScope scope(isolate);
   ASSERT(args.length() == 2);
-  KeyedLoadIC ic(isolate);
+  KeyedLoadIC ic(isolate, static_cast<IC::TaintWrapperFlag>(HAS_TAINTED_ARGS()));
   IC::State state = IC::StateFrom(ic.target(), args[0], args[1]);
   bool taint_policy;
   MaybeObject* result;
@@ -1918,10 +1951,12 @@ RUNTIME_FUNCTION(MaybeObject*, KeyedLoadIC_MissForceGeneric) {
 
 // Used from ic-<arch>.cc.
 RUNTIME_FUNCTION(MaybeObject*, StoreIC_Miss) {
-  UNTAINT_ARGS(2); // do not untaint value
+  UNTAINT_ARGS(1);
+  ASSERT_IF_TAINTED_ARG(1);
+  // NOTE(petr): do not untaint stored value (args[2])
   HandleScope scope;
   ASSERT(args.length() == 3);
-  StoreIC ic(isolate);
+  StoreIC ic(isolate, static_cast<IC::TaintWrapperFlag>(HAS_TAINTED_ARGS()));
   IC::State state = IC::StateFrom(ic.target(), args[0], args[1]);
   Code::ExtraICState extra_ic_state = ic.target()->extra_ic_state();
   return ic.Store(state,
@@ -1990,10 +2025,12 @@ RUNTIME_FUNCTION(MaybeObject*, SharedStoreIC_ExtendStorage) {
 
 // Used from ic-<arch>.cc.
 RUNTIME_FUNCTION(MaybeObject*, KeyedStoreIC_Miss) {
-  UNTAINT_ARGS(2);  // do not untaint value
+  UNTAINT_ARGS(1);
+  ASSERT_IF_TAINTED_ARG(1);
+  // NOTE(petr): do not untaint stored value (args[2])
   HandleScope scope(isolate);
   ASSERT(args.length() == 3);
-  KeyedStoreIC ic(isolate);
+  KeyedStoreIC ic(isolate, static_cast<IC::TaintWrapperFlag>(HAS_TAINTED_ARGS()));
   IC::State state = IC::StateFrom(ic.target(), args[0], args[1]);
   Code::ExtraICState extra_ic_state = ic.target()->extra_ic_state();
   return ic.Store(state,
@@ -2009,7 +2046,7 @@ RUNTIME_FUNCTION(MaybeObject*, KeyedStoreIC_Slow) {
   ASSERT_IF_TAINTED_ARGS();
   NoHandleAllocation na;
   ASSERT(args.length() == 3);
-  KeyedStoreIC ic(isolate);
+  KeyedStoreIC ic(isolate, IC::NO_TAINT_WRAPPER);
   Code::ExtraICState extra_ic_state = ic.target()->extra_ic_state();
   Handle<Object> object = args.at<Object>(0);
   Handle<Object> key = args.at<Object>(1);
@@ -2026,12 +2063,10 @@ RUNTIME_FUNCTION(MaybeObject*, KeyedStoreIC_Slow) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, KeyedStoreIC_MissForceGeneric) {
-  ASSERT_IF_TAINTED_ARG(0);
-  UNTAINT_ARGS(0);
-  UNTAINT_ARG(args[1]);
+  ASSERT_IF_TAINTED_ARGS();
   HandleScope scope(isolate);
   ASSERT(args.length() == 3);
-  KeyedStoreIC ic(isolate);
+  KeyedStoreIC ic(isolate, IC::NO_TAINT_WRAPPER);
   IC::State state = IC::StateFrom(ic.target(), args[0], args[1]);
   Code::ExtraICState extra_ic_state = ic.target()->extra_ic_state();
   return ic.Store(state,

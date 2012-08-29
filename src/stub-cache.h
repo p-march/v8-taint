@@ -487,6 +487,12 @@ class StubCompiler BASE_EMBEDDED {
  protected:
   Handle<Code> GetCodeWithFlags(Code::Flags flags, const char* name);
   Handle<Code> GetCodeWithFlags(Code::Flags flags, Handle<String> name);
+  Handle<Code> GetTaintWrapperCode(Handle<Code> target);
+  Handle<Code> GenerateTaintWrapper(Handle<Code> target,
+                                    bool taint_result,
+                                    Register receiver,
+                                    Register scratch1,
+                                    Register scratch2);
 
   MacroAssembler* masm() { return &masm_; }
   void set_failure(Failure* failure) { failure_ = failure; }
@@ -581,6 +587,8 @@ class LoadStubCompiler: public StubCompiler {
                                  Handle<String> name,
                                  bool is_dont_delete);
 
+  Handle<Code> CompileTaintWrapper(Handle<Code> target);
+
  private:
   Handle<Code> GetCode(PropertyType type, Handle<String> name);
 };
@@ -629,6 +637,8 @@ class KeyedLoadStubCompiler: public StubCompiler {
 
   static void GenerateLoadDictionaryElement(MacroAssembler* masm);
 
+  Handle<Code> CompileTaintWrapper(Handle<Code> target);
+
  private:
   Handle<Code> GetCode(PropertyType type,
                        Handle<String> name,
@@ -638,7 +648,7 @@ class KeyedLoadStubCompiler: public StubCompiler {
 
 class StoreStubCompiler: public StubCompiler {
  public:
-  StoreStubCompiler(Isolate* isolate, StrictModeFlag strict_mode)
+  StoreStubCompiler(Isolate* isolate, StrictModeFlag strict_mode = kStrictMode)
     : StubCompiler(isolate), strict_mode_(strict_mode) { }
 
 
@@ -658,6 +668,8 @@ class StoreStubCompiler: public StubCompiler {
                                   Handle<JSGlobalPropertyCell> holder,
                                   Handle<String> name);
 
+  Handle<Code> CompileTaintWrapper(Handle<Code> target);
+
  private:
   Handle<Code> GetCode(PropertyType type, Handle<String> name);
 
@@ -667,7 +679,8 @@ class StoreStubCompiler: public StubCompiler {
 
 class KeyedStoreStubCompiler: public StubCompiler {
  public:
-  KeyedStoreStubCompiler(Isolate* isolate, StrictModeFlag strict_mode)
+  KeyedStoreStubCompiler(Isolate* isolate,
+                         StrictModeFlag strict_mode = kStrictMode)
     : StubCompiler(isolate), strict_mode_(strict_mode) { }
 
   Handle<Code> CompileStoreField(Handle<JSObject> object,
@@ -692,6 +705,8 @@ class KeyedStoreStubCompiler: public StubCompiler {
                                          ElementsKind elements_kind);
 
   static void GenerateStoreDictionaryElement(MacroAssembler* masm);
+
+  Handle<Code> CompileTaintWrapper(Handle<Code> target);
 
  private:
   Handle<Code> GetCode(PropertyType type,
