@@ -144,7 +144,7 @@ void* OS::Allocate(const size_t requested,
                    bool is_executable) {
   const size_t msize = RoundUp(requested, getpagesize());
   int prot = PROT_READ | PROT_WRITE | (is_executable ? PROT_EXEC : 0);
-  void* mbase = mmap(OS::GetRandomMmapAddr(),
+  void* mbase = mmap(OS::GetRandomMmapAddr(msize),
                      msize,
                      prot,
                      MAP_PRIVATE | MAP_ANON,
@@ -206,7 +206,7 @@ OS::MemoryMappedFile* OS::MemoryMappedFile::open(const char* name) {
   int size = ftell(file);
 
   void* memory =
-      mmap(OS::GetRandomMmapAddr(),
+      mmap(OS::GetRandomMmapAddr(size),
            size,
            PROT_READ | PROT_WRITE,
            MAP_SHARED,
@@ -226,7 +226,7 @@ OS::MemoryMappedFile* OS::MemoryMappedFile::create(const char* name, int size,
     return NULL;
   }
   void* memory =
-      mmap(OS::GetRandomMmapAddr(),
+      mmap(OS::GetRandomMmapAddr(size),
           size,
           PROT_READ | PROT_WRITE,
           MAP_SHARED,
@@ -355,7 +355,7 @@ VirtualMemory::VirtualMemory(size_t size, size_t alignment)
   ASSERT(IsAligned(alignment, static_cast<intptr_t>(OS::AllocateAlignment())));
   size_t request_size = RoundUp(size + alignment,
                                 static_cast<intptr_t>(OS::AllocateAlignment()));
-  void* reservation = mmap(OS::GetRandomMmapAddr(),
+  void* reservation = mmap(OS::GetRandomMmapAddr(request_size),
                            request_size,
                            PROT_NONE,
                            MAP_PRIVATE | MAP_ANON | MAP_NORESERVE,
@@ -406,7 +406,7 @@ void VirtualMemory::Reset() {
 
 
 void* VirtualMemory::ReserveRegion(size_t size) {
-  void* result = mmap(OS::GetRandomMmapAddr(),
+  void* result = mmap(OS::GetRandomMmapAddr(size),
                       size,
                       PROT_NONE,
                       MAP_PRIVATE | MAP_ANON | MAP_NORESERVE,
