@@ -181,6 +181,7 @@ class LChunkBuilder;
   V(ValueOf)                                   \
   V(UntaintWithFlag)                           \
   V(Untaint)                                   \
+  V(Taint)                                     \
   V(TaintResult)
 
 #define GVN_FLAG_LIST(V)                       \
@@ -4399,6 +4400,7 @@ class HUntaint: public HTemplateInstruction<1> {
 };
 
 
+// TODO(petr): substitute this instr with Taint
 class HTaintResult: public HTemplateInstruction<1> {
  public:
   explicit HTaintResult(HValue* value) {
@@ -4415,6 +4417,25 @@ class HTaintResult: public HTemplateInstruction<1> {
   }
 
   DECLARE_CONCRETE_INSTRUCTION(TaintResult)
+};
+
+
+class HTaint: public HTemplateInstruction<1> {
+ public:
+  explicit HTaint(HValue* value) {
+    SetOperandAt(0, value);
+    set_representation(Representation::Tagged());
+  }
+
+  HValue* value() { return OperandAt(0); }
+
+  virtual void PrintDataTo(StringStream* stream);
+
+  virtual Representation RequiredInputRepresentation(int index) {
+    return Representation::Tagged();
+  }
+
+  DECLARE_CONCRETE_INSTRUCTION(Taint)
 };
 
 

@@ -2628,6 +2628,23 @@ void FullCodeGenerator::EmitIsTainted(CallRuntime* expr) {
 }
 
 
+void FullCodeGenerator::EmitTaint(CallRuntime* expr) {
+  ZoneList<Expression*>* args = expr->arguments();
+  ASSERT(args->length() == 1);
+  Label done, slow;
+
+  VisitForAccumulatorValue(args->at(0));
+
+  __ Taint(rax, rbx, rcx, rbx, &slow, false);
+  __ jmp(&done);
+  __ bind(&slow);
+  __ CallRuntime(Runtime::kTaint, 1);
+  __ bind(&done);
+
+  context()->Plug(rax);
+}
+
+
 void FullCodeGenerator::EmitTaintNot(CallRuntime* expr) {
   ASSERT(FLAG_taint_policy);
   ZoneList<Expression*>* args = expr->arguments();

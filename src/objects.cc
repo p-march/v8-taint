@@ -881,11 +881,10 @@ const char* TypeToString(InstanceType type) {
 
 
 Object* Object::GetTaintedWrapper() {
-  if (this->IsTainted())
+  if (IsTainted())
     return this;
 
-  if (!this->IsJSObject())
-    return NULL;
+  ASSERT(IsJSObject());
   
   return JSObject::cast(this)->tainted();
 }
@@ -904,49 +903,24 @@ bool Object::HasTaintedWrapper() {
 }
 
 
-MaybeObject* Object::TaintReference() {
-  ASSERT(!this->IsTainted());
-  ASSERT(!this->IsSpecObject());
+MaybeObject* Object::TaintPrimitive() {
+  ASSERT(!IsTainted());
+  ASSERT(IsTaintPrimitive());
+
   Object* result;
   { MaybeObject* maybe_clone = HEAP->AllocateTainted();
     if (!maybe_clone->ToObject(&result)) return maybe_clone;
   }
   Tainted::cast(result)->set_tainted_object(this);
-  // CLEAN(petr):
-  //printf("Tainting reference %s taint %p object %p\n", this->IsHeapObject() ?
-         //TypeToString(HeapObject::cast(this)->map()->instance_type()) : "smi",
-         //(void*) result, (void*)this);
-
   return result;
 }
 
 
-MaybeObject* Object::TaintObject() {
-  ASSERT(!this->IsTainted());
-  ASSERT(this->IsJSObject());
-  if (JSObject::cast(this)->tainted() != 0) {
-    if (JSObject::cast(this)->tainted() ==
-        JSObject::cast(this)->GetHeap()->null_value()) {
-      return this;
-    } else {
-      return JSObject::cast(this)->tainted();
-    }
-  }
-
-  /* Never taint functions */
-  if (HeapObject::cast(this)->map()->instance_type() == JS_FUNCTION_TYPE) {
-    return this;
-  }
-
-  /* Never taint gloabls */
-  if (HeapObject::cast(this)->map()->instance_type() == JS_GLOBAL_PROXY_TYPE) {
-    return this;
-  }
-
-// TODO(petr): ???
-//  if (HeapObject::cast(this)->map()->instance_type() == JS_ARRAY_TYPE) {
-//    return this;
-//  }
+MaybeObject* Object::TaintJSObject() {
+  ASSERT(!IsTainted());
+  ASSERT(IsTaintJSObject());
+  ASSERT(IsTaintable());
+  ASSERT(!HasTaintedWrapper());
 
   HeapObject* heap_obj = HeapObject::cast(this);
   Heap* heap = heap_obj->GetHeap();
@@ -1001,51 +975,43 @@ MaybeObject* Object::TaintObject() {
                   (size - Tainted::kSize) / kPointerSize);
   }
 
-  // CLEAN(petr):
-  // printf("Tainting object %s %p clone %p space %d\n", this->IsHeapObject() ?
-         //TypeToString(HeapObject::cast(clone)->map()->instance_type()) : "smi",
-         //(void*) this, (void*)clone, space);
-
-#if 0
-  ASSERT(HeapObject::cast(clone)->map()->instance_type() != JS_GLOBAL_PROXY_TYPE);
-  clone->ShortPrint(); printf("\n");
-#endif
-#if 0
-  Object* constructor_name =
-            JSFunction::cast(JSObject::cast(clone)->map()->constructor())->shared()->name();
-  constructor_name->ShortPrint(); printf("\n");
-  if (String::cast(constructor_name)->Equals(*heap->isolate()->factory()->LookupAsciiSymbol("HTMLDocument"))) {
-    heap->isolate()->PrintStack();
-    ASSERT(!String::cast(constructor_name)->Equals(*heap->isolate()->factory()->LookupAsciiSymbol("HTMLDocument")));  }
-#endif
-
   return self;
 }
 
 
 MaybeObject* Object::Taint() {
-  ASSERT(!this->IsTainted());
+  if (IsTainted())
+    return this;
 
-  if (this->IsSpecObject()) {
+  if (!IsTaintable())
+    return this;
+
+  if (HasTaintedWrapper())
+    return GetTaintedWrapper();
+
+  if (IsTaintPrimitive())
+    return TaintPrimitive();
     // we object-taint (overwrite original objects) only those
     // objects that can be passed by reference
-    return TaintObject();
-  } else {
-    return TaintReference();
-  }
+
+  if (IsTaintJSObject())
+    return TaintJSObject();
+
+  UNREACHABLE();
+  return this;
 }
 
 
-Object* Object::UntaintReference() {
-  ASSERT(this->IsTainted());
+Object* Object::UntaintPrimitive() {
+  ASSERT(IsTainted());
   Object* object = Tainted::cast(this)->tainted_object();
-  ASSERT(!object->IsSpecObject());
+  ASSERT(object->IsTaintPrimitive());
   return object;
 }
 
 
-MaybeObject* Object::UntaintObject() {
-  ASSERT(this->IsTainted());
+MaybeObject* Object::UntaintJSObject() {
+  ASSERT(IsTainted());
 
   Tainted* tainted = Tainted::cast(this);
   Object* object = tainted->tainted_object();
@@ -1087,22 +1053,23 @@ MaybeObject* Object::UntaintObject() {
 
 
 MaybeObject* Object::Untaint() {
-  ASSERT(this->IsTainted());
+  ASSERT(IsTainted());
   Object* object = Tainted::cast(this)->tainted_object();
 
-  // NOTE(petr): Tainted object continue live on the heap,
-  // and supposed to be freed by garbage collector
-  if (object->IsSpecObject()) {
-    return UntaintObject();
-  } else {
-    return UntaintReference();
-  }
+  if (object->IsTaintPrimitive())
+    return UntaintPrimitive();
+
+  if (object->IsTaintJSObject())
+    return UntaintJSObject();
+
+  UNREACHABLE();
+  return this;
 }
 
 
 void Object::Untaintable() {
   ASSERT(!this->IsTainted());
-  ASSERT(this->IsSpecObject());
+  ASSERT(this->IsTaintJSObject());
   JSObject *self = JSObject::cast(this);
   ASSERT(self->tainted() == Smi::FromInt(0) || 
          self->tainted() == self->GetHeap()->null_value());
@@ -1112,7 +1079,7 @@ void Object::Untaintable() {
 
 void Object::Taintable() {
   ASSERT(!this->IsTainted());
-  ASSERT(this->IsSpecObject());
+  ASSERT(this->IsTaintJSObject());
 
   JSObject *self = JSObject::cast(this);
   if (self->tainted() == self->GetHeap()->null_value()) {

@@ -45,7 +45,8 @@ MacroAssembler::MacroAssembler(Isolate* arg_isolate, void* buffer, int size)
       generating_stub_(false),
       allow_stub_calls_(true),
       has_frame_(false),
-      root_array_available_(true) {
+      root_array_available_(true),
+      taint_flag_set_(false) {
   if (isolate() != NULL) {
     code_object_ = Handle<Object>(isolate()->heap()->undefined_value(),
                                   isolate());
@@ -175,13 +176,6 @@ void MacroAssembler::StoreRoot(Register source, Heap::RootListIndex index) {
 }
 
 
-void MacroAssembler::StoreRoot(Smi* source, Heap::RootListIndex index) {
-  ASSERT(root_array_available_);
-  Move(Operand(kRootRegister, (index << kPointerSizeLog2) - kRootRegisterBias),
-       source);
-}
-
-
 void MacroAssembler::PushRoot(Heap::RootListIndex index) {
   ASSERT(root_array_available_);
   push(Operand(kRootRegister, (index << kPointerSizeLog2) - kRootRegisterBias));
@@ -192,13 +186,6 @@ void MacroAssembler::CompareRoot(Register with, Heap::RootListIndex index) {
   ASSERT(root_array_available_);
   cmpq(with, Operand(kRootRegister,
                      (index << kPointerSizeLog2) - kRootRegisterBias));
-}
-
-
-void MacroAssembler::CompareRoot(Smi *with, Heap::RootListIndex index) {
-  ASSERT(root_array_available_);
-  SmiCompare(Operand(kRootRegister,
-             (index << kPointerSizeLog2) - kRootRegisterBias), with);
 }
 
 
@@ -3780,62 +3767,29 @@ void MacroAssembler::Untaint(Register src) {
 
 
 void MacroAssembler::UntaintWithFlag(Register src) {
-#if DEBUG && TAINT_FLAG
-  Label ok;
-  CompareRoot(Smi::FromInt(1), Heap::kTaintFlagCheckRootIndex);
-  j(equal, &ok, Label::kNear);
-  Abort("UntaintWithFlag: flag check failed");
-  bind(&ok);
-#endif
   Label not_tainted;
   Condition smi = CheckSmi(src);
   j(smi, &not_tainted, Label::kNear);
   Condition tainted = CheckTainted(src);
   j(NegateCondition(tainted), &not_tainted, Label::kNear);
-#ifdef TAINT_FLAG
-  StoreRoot(Smi::FromInt(1), Heap::kTaintFlagRootIndex);
-#else
   Move(Operand(rsp, 0), Smi::FromInt(1));
-#endif
   movq(src, FieldOperand(src, Tainted::kObjectOffset));
   bind(&not_tainted);
 }
 
 
 void MacroAssembler::ClearTaintFlag() {
-#ifdef TAINT_FLAG
-#ifdef DEBUG
-  Info("Taint+");
-  Label ok;
-  CompareRoot(Smi::FromInt(0), Heap::kTaintFlagCheckRootIndex);
-  j(equal, &ok, Label::kNear);
-  Abort("ClearTaintFlag: flag check failed");
-  bind(&ok);
-  StoreRoot(Smi::FromInt(1), Heap::kTaintFlagCheckRootIndex);
-#endif
-  StoreRoot(Smi::FromInt(0), Heap::kTaintFlagRootIndex);
-#else
+  ASSERT(!taint_flag_set_);
+  taint_flag_set_ = true;
   Push(Smi::FromInt(0));
-#endif
 }
 
 
 void MacroAssembler::JumpIfTaintFlagNotSet(Label* not_set) {
-#ifdef TAINT_FLAG
-#ifdef DEBUG
-  Info("Taint-");
-  Label ok;
-  CompareRoot(Smi::FromInt(1), Heap::kTaintFlagCheckRootIndex);
-  j(equal, &ok, Label::kNear);
-  Abort("JumpIfTaintFlagNotSet: flag check failed");
-  bind(&ok);
-  StoreRoot(Smi::FromInt(0), Heap::kTaintFlagCheckRootIndex);
-#endif
-  CompareRoot(Smi::FromInt(0), Heap::kTaintFlagRootIndex);
-#else
+  ASSERT(taint_flag_set_);
+  taint_flag_set_ = false;
   pop(kScratchRegister);
-  SmiCompare(Operand(rsp, -kPointerSize), Smi::FromInt(0));
-#endif  
+  testq(kScratchRegister, kScratchRegister);
   j(equal, not_set);
 }
 
@@ -4456,6 +4410,216 @@ void MacroAssembler::EnsureNotWhite(
 
   bind(&done);
 }
+
+
+void MacroAssembler::TaintPrimitive(Register value,
+                                    Register scratch1,
+                                    Register scratch2,
+                                    Label* slow) {
+#ifdef DEBUG
+  {
+    Label ok;
+    JumpIfNotTainted(value, &ok, Label::kNear);
+    Abort("TaintPrimitive: tainted input value");
+    bind(&ok);
+  }
+  {
+    Label ok;
+    JumpIfSmi(value, &ok, Label::kNear);
+    CmpObjectType(value, LAST_DATA_TYPE, kScratchRegister);
+    j(below_equal, &ok, Label::kNear);
+    Abort("TaintPrimitive: non-primitive input value");
+    bind(&ok);
+  }
+#endif
+
+  AllocateTainted(scratch1, scratch2, slow);
+  movq(FieldOperand(scratch1, Tainted::kObjectOffset), value);
+  movq(value, scratch1);
+}
+
+
+void MacroAssembler::TaintJSObject(Register value,
+                                   Register scratch1,
+                                   Register scratch2,
+                                   Register scratch3,
+                                   Label* slow,
+                                   bool use_repmovs) {
+  Label done;
+#ifdef DEBUG
+  {
+    Label ok;
+    JumpIfNotTainted(value, &ok, Label::kNear);
+    Abort("TaintJSObject: tainted input value");
+    bind(&ok);
+  }
+  {
+    Label fail, ok;
+    JumpIfNotSmi(value, &ok, Label::kNear);
+    CmpObjectType(value, FIRST_TAINT_JS_OBJECT_TYPE, kScratchRegister);
+    j(below, &fail, Label::kNear);
+    CmpObjectType(value, LAST_TAINT_JS_OBJECT_TYPE, kScratchRegister);
+    j(below_equal, &ok, Label::kNear);
+    bind(&fail);
+    Abort("TaintJSObject: non-JSObject input value");
+    bind(&ok);
+  }
+#endif
+
+  // check if object has a taint wrapper
+  Label should_taint; 
+  movq(scratch1, FieldOperand(value, JSObject::kTaintedOffset));
+  testq(scratch1, scratch1);
+  j(equal, &should_taint, Label::kNear);
+  CompareRoot(scratch1, Heap::kNullValueRootIndex);
+  // value is non-taintable
+  j(equal, &done);
+  // value has tainted wrapper
+  movq(value, scratch1);
+#ifdef DEBUG
+  {
+    Label ok;
+    JumpIfTainted(value, &ok, Label::kNear);
+    Abort("TaintJSObject: JSObject must have tainted wrapper");
+    bind(&ok);
+  }
+#endif
+  jmp(&done);
+  bind(&should_taint);
+  
+  // get object size
+  movq(scratch1, FieldOperand(value, HeapObject::kMapOffset));
+  movzxbq(scratch1, FieldOperand(scratch1, Map::kInstanceSizeOffset));
+  shl(scratch1, Immediate(kPointerSizeLog2));
+
+#ifdef DEBUG
+  {
+    Label ok;
+    cmpq(scratch1, Immediate(kVariableSizeSentinel));
+    j(not_equal, &ok, Label::kNear);
+    Abort("TaintJSObject: tainted object is VariableSizeSentinel");
+    bind(&ok);
+  }
+  {
+    Label ok;
+    cmpq(scratch1, Immediate(Tainted::kSize));
+    j(above_equal, &ok, Label::kNear);
+    Abort("TaintJSObject: tainted object is smaller than Tainted Object");
+    bind(&ok);
+  }
+#endif
+  
+  ASSERT(!scratch1.is(scratch2));
+  ASSERT(!scratch3.is(scratch2));
+  
+  AllocateInNewSpace(scratch1,
+                     scratch2,
+                     scratch3,
+                     no_reg,
+                     slow,
+                     NO_ALLOCATION_FLAGS);
+
+  if (use_repmovs) {
+    if (scratch1.is(scratch3)) {
+      movq(scratch2, FieldOperand(value, HeapObject::kMapOffset));
+      movzxbq(scratch2, FieldOperand(scratch2, Map::kInstanceSizeOffset));
+    } else {
+      movq(scratch3, scratch1); // backup size in bytes
+      shr(scratch1, Immediate(kPointerSizeLog2));
+    }
+  
+    // value - original object
+    // scratch1 - size in qwords
+    // scratch2 - start of cloned object
+    // scratch3 - size in bytes if scratch3 != scratch1
+
+    ASSERT(scratch2.is(rdi));  // rep movs destination
+    ASSERT(value.is(rsi));     // rep movs source
+    ASSERT(scratch1.is(rcx));  // rep movs count
+    repmovsq();
+
+    movq(FieldOperand(scratch2, JSObject::kTaintedOffset), value);
+
+    LoadRoot(kScratchRegister, Heap::kTaintedMapRootIndex);
+    movq(FieldOperand(value, HeapObject::kMapOffset), kScratchRegister);
+    if (scratch1.is(scratch3)) {
+      shl(scratch1, Immediate(kPointerSizeLog2));
+    }
+    movl(FieldOperand(value, Tainted::kSizeOffset + kIntSize), scratch3);
+    movq(FieldOperand(value, Tainted::kObjectOffset), scratch2);
+  } else {
+    if (scratch1.is(scratch3)) {
+      movq(scratch2, FieldOperand(value, HeapObject::kMapOffset));
+      movzxbq(scratch2, FieldOperand(scratch2, Map::kInstanceSizeOffset));
+      lea(value, Operand(value, scratch2, times_pointer_size, 0));
+    } else {
+      movq(scratch2, scratch1);
+      addq(value, scratch2);
+      shr(scratch2, Immediate(kPointerSizeLog2));
+      // scratch1 - size in bytes
+    }
+
+    // value - end of original object
+    // scratch2 - size in qwords
+    // scratch3 - end of cloned object
+
+    Label loop;
+    bind(&loop);
+    movq(kScratchRegister, Operand(value, 0));
+    movq(Operand(scratch3, 0), kScratchRegister);
+    subq(value, Immediate(kPointerSize));
+    subq(scratch3, Immediate(kPointerSize));
+    decq(scratch2);
+    j(not_zero, &loop, Label::kNear);
+
+    // value - start of original object
+    // scratch3 - start of cloned object
+    
+    movq(FieldOperand(scratch3, JSObject::kTaintedOffset), value);
+
+    movq(FieldOperand(value, Tainted::kObjectOffset), scratch3);
+    if (scratch1.is(scratch3)) {
+      movq(scratch1, FieldOperand(value, HeapObject::kMapOffset));
+      movzxbq(scratch1, FieldOperand(scratch1, Map::kInstanceSizeOffset));
+      shl(scratch1, Immediate(kPointerSizeLog2));
+    }
+    movl(FieldOperand(value, Tainted::kSizeOffset + kIntSize), scratch1);
+    LoadRoot(kScratchRegister, Heap::kTaintedMapRootIndex);
+    movq(FieldOperand(value, HeapObject::kMapOffset), kScratchRegister);
+  }
+  
+  bind(&done);
+}
+
+
+void MacroAssembler::Taint(Register value,
+                           Register scratch1,
+                           Register scratch2,
+                           Register scratch3,
+                           Label* slow,
+                           bool use_repmovs) {
+  Label done, primitive;
+  
+  JumpIfSmi(value, &primitive);
+  movq(kScratchRegister, FieldOperand(value, HeapObject::kMapOffset));
+  CmpInstanceType(kScratchRegister, TAINTED_TYPE);
+  j(equal, &done);
+  CmpInstanceType(kScratchRegister, LAST_TAINT_PRIMITIVE_TYPE);
+  j(below_equal, &primitive);
+  CmpInstanceType(kScratchRegister, FIRST_TAINT_JS_OBJECT_TYPE);
+  j(below, &done);
+  CmpInstanceType(kScratchRegister, LAST_TAINT_JS_OBJECT_TYPE);
+  j(above, &done);
+
+  TaintJSObject(value, scratch1, scratch2, scratch3, slow, use_repmovs);
+  jmp(&done);
+
+  bind(&primitive);
+  TaintPrimitive(value, scratch1, scratch2, slow);
+  
+  bind(&done);
+}
+
 
 } }  // namespace v8::internal
 

@@ -89,12 +89,10 @@ class UnaryOpStub: public CodeStub {
  public:
   UnaryOpStub(Token::Value op,
               UnaryOverwriteMode mode,
-              UnaryOpIC::TypeInfo operand_type = UnaryOpIC::UNINITIALIZED,
-              bool taint_mode = false)
+              UnaryOpIC::TypeInfo operand_type = UnaryOpIC::UNINITIALIZED)
       : op_(op),
         mode_(mode),
-        operand_type_(operand_type),
-        taint_mode_(taint_mode){
+        operand_type_(operand_type) {
   }
 
  private:
@@ -112,14 +110,12 @@ class UnaryOpStub: public CodeStub {
   class ModeBits: public BitField<UnaryOverwriteMode, 0, 1> {};
   class OpBits: public BitField<Token::Value, 1, 7> {};
   class OperandTypeInfoBits: public BitField<UnaryOpIC::TypeInfo, 8, 3> {};
-  class TaintModeBits: public BitField<bool, 11, 1> {};
 
   Major MajorKey() { return UnaryOp; }
   int MinorKey() {
     return ModeBits::encode(mode_)
            | OpBits::encode(op_)
-           | OperandTypeInfoBits::encode(operand_type_)
-           | TaintModeBits::encode(taint_mode_);
+           | OperandTypeInfoBits::encode(operand_type_);
   }
 
   // Note: A lot of the helper functions below will vanish when we use virtual
@@ -160,32 +156,27 @@ class UnaryOpStub: public CodeStub {
   virtual void FinishCode(Handle<Code> code) {
     code->set_unary_op_type(operand_type_);
   }
-
-  friend class TaintWrapperStub;
 };
 
 
 class BinaryOpStub: public CodeStub {
  public:
-  BinaryOpStub(Token::Value op, OverwriteMode mode, bool taint_mode = false)
+  BinaryOpStub(Token::Value op, OverwriteMode mode)
       : op_(op),
         mode_(mode),
         operands_type_(BinaryOpIC::UNINITIALIZED),
-        result_type_(BinaryOpIC::UNINITIALIZED),
-        taint_mode_(taint_mode) {
+        result_type_(BinaryOpIC::UNINITIALIZED) {
     ASSERT(OpBits::is_valid(Token::NUM_TOKENS));
   }
 
   BinaryOpStub(
       int key,
       BinaryOpIC::TypeInfo operands_type,
-      BinaryOpIC::TypeInfo result_type = BinaryOpIC::UNINITIALIZED,
-      bool taint_mode = false)
+      BinaryOpIC::TypeInfo result_type = BinaryOpIC::UNINITIALIZED)
       : op_(OpBits::decode(key)),
         mode_(ModeBits::decode(key)),
         operands_type_(operands_type),
-        result_type_(result_type),
-        taint_mode_(taint_mode) { }
+        result_type_(result_type) { }
 
  private:
   enum SmiCodeGenerateHeapNumberResults {
@@ -200,25 +191,20 @@ class BinaryOpStub: public CodeStub {
   BinaryOpIC::TypeInfo operands_type_;
   BinaryOpIC::TypeInfo result_type_;
 
-  // flags whether the stab is wrapped with a taint wrapper
-  bool taint_mode_;
-
   virtual void PrintName(StringStream* stream);
 
-  // Minor key encoding in 16 bits WRRRTTTOOOOOOOMM.
+  // Minor key encoding in 15 bits RRRTTTOOOOOOOMM.
   class ModeBits: public BitField<OverwriteMode, 0, 2> {};
   class OpBits: public BitField<Token::Value, 2, 7> {};
   class OperandTypeInfoBits: public BitField<BinaryOpIC::TypeInfo, 9, 3> {};
   class ResultTypeInfoBits: public BitField<BinaryOpIC::TypeInfo, 12, 3> {};
-  class TaintModeBits: public BitField<bool, 15, 1> {};
 
   Major MajorKey() { return BinaryOp; }
   int MinorKey() {
     return OpBits::encode(op_)
            | ModeBits::encode(mode_)
            | OperandTypeInfoBits::encode(operands_type_)
-           | ResultTypeInfoBits::encode(result_type_)
-           | TaintModeBits::encode(taint_mode_);
+           | ResultTypeInfoBits::encode(result_type_);
   }
 
   void Generate(MacroAssembler* masm);
@@ -259,7 +245,6 @@ class BinaryOpStub: public CodeStub {
   }
 
   friend class CodeGenerator;
-  friend class TaintWrapperStub;
 };
 
 

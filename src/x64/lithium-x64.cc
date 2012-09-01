@@ -1673,6 +1673,15 @@ LInstruction* LChunkBuilder::DoTaintResult(HTaintResult* instr) {
 }
 
 
+LInstruction* LChunkBuilder::DoTaint(HTaint* instr) {
+  LOperand* value = UseRegister(instr->value());
+  LOperand* temp1 = TempRegister();
+  LOperand* temp2 = TempRegister();
+  LTaint* result = new LTaint(value, temp1, temp2);
+  return AssignPointerMap(DefineSameAsFirst(result));
+}
+
+
 LInstruction* LChunkBuilder::DoCheckInstanceType(HCheckInstanceType* instr) {
   LOperand* value = UseRegisterAtStart(instr->value());
   LCheckInstanceType* result = new LCheckInstanceType(value);

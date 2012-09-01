@@ -567,7 +567,7 @@ enum InstanceType {
   EXTERNAL_DOUBLE_ARRAY_TYPE,
   EXTERNAL_PIXEL_ARRAY_TYPE,  // LAST_EXTERNAL_ARRAY_TYPE
   FIXED_DOUBLE_ARRAY_TYPE,
-  FILLER_TYPE,  // LAST_DATA_TYPE
+  FILLER_TYPE,  // LAST_DATA_TYPE, LAST_TAINT_JS_OBJECT_TYPE
 
   TAINTED_TYPE,
 
@@ -603,7 +603,7 @@ enum InstanceType {
   JS_FUNCTION_PROXY_TYPE,  // FIRST_JS_RECEIVER_TYPE, FIRST_JS_PROXY_TYPE
   JS_PROXY_TYPE,  // LAST_JS_PROXY_TYPE
 
-  JS_VALUE_TYPE,  // FIRST_JS_OBJECT_TYPE
+  JS_VALUE_TYPE,  // FIRST_JS_OBJECT_TYPE, FIRST_TAINT_JS_OBJECT_TYPE
   JS_OBJECT_TYPE,
   JS_CONTEXT_EXTENSION_OBJECT_TYPE,
   JS_GLOBAL_OBJECT_TYPE,
@@ -614,7 +614,7 @@ enum InstanceType {
   JS_MAP_TYPE,
   JS_WEAK_MAP_TYPE,
 
-  JS_REGEXP_TYPE,
+  JS_REGEXP_TYPE, // LAST_TAINT_JS_OBJECT_TYPE
 
   JS_FUNCTION_TYPE,  // LAST_JS_OBJECT_TYPE, LAST_JS_RECEIVER_TYPE
 
@@ -649,7 +649,10 @@ enum InstanceType {
   LAST_NONCALLABLE_SPEC_OBJECT_TYPE = JS_REGEXP_TYPE,
   // Note that the types for which typeof is "function" are not continuous.
   // Define this so that we can put assertions on discrete checks.
-  NUM_OF_CALLABLE_SPEC_OBJECT_TYPES = 2
+  NUM_OF_CALLABLE_SPEC_OBJECT_TYPES = 2,
+  LAST_TAINT_PRIMITIVE_TYPE = LAST_DATA_TYPE,
+  FIRST_TAINT_JS_OBJECT_TYPE = FIRST_JS_OBJECT_TYPE,
+  LAST_TAINT_JS_OBJECT_TYPE = JS_REGEXP_TYPE
 };
 
 const int kExternalArrayTypeCount =
@@ -943,21 +946,16 @@ class Object : public MaybeObject {
   // < the length of the string.  Used to implement [] on strings.
   inline bool IsStringObjectWithCharacterAt(uint32_t index);
 
-  // Object tainting. If an object is pass-by-reference, we use TaintObject and
-  // overwrite it in place. If an object is pass-by-value, we use TaintReference
-  // and wrap reference to the object with Tainted object
   MUST_USE_RESULT MaybeObject* Taint();
-  MUST_USE_RESULT MaybeObject* TaintReference();
-  MUST_USE_RESULT MaybeObject* TaintObject();
-
-  // Object untainting
   MaybeObject* Untaint();
-  Object* UntaintReference();
-  MaybeObject* UntaintObject();
 
   // Mark object as untaintable
   void Untaintable();
   void Taintable();
+
+  inline bool IsTaintable();
+  inline bool IsTaintPrimitive();
+  inline bool IsTaintJSObject();
 
   Object* GetTaintedWrapper();
   bool HasTaintedWrapper();
@@ -983,6 +981,12 @@ class Object : public MaybeObject {
   static const int kHeaderSize = 0;  // Object does not take up any space.
 
  private:
+  MaybeObject* TaintPrimitive();
+  MaybeObject* TaintJSObject();
+  Object* UntaintPrimitive();
+  MaybeObject* UntaintJSObject();
+
+
   DISALLOW_IMPLICIT_CONSTRUCTORS(Object);
 };
 
@@ -3974,6 +3978,9 @@ class Code: public HeapObject {
   // it is only used by the garbage collector itself.
   DECL_ACCESSORS(next_code_flushing_candidate, Object)
 
+  // [taint_wrapper]: pointer to a taint wrapper or undefined value
+  DECL_ACCESSORS(taint_wrapper, Object)
+
   // Unchecked accessors to be used during GC.
   inline ByteArray* unchecked_relocation_info();
   inline FixedArray* unchecked_deoptimization_data();
@@ -4078,9 +4085,9 @@ class Code: public HeapObject {
   inline byte to_boolean_state();
   inline void set_to_boolean_state(byte value);
 
-  // [wrapped_stub]: For kind TAINT_WRAPPER_IC tells what stub it wrapps.
-  inline Code* wrapped_stub();
-  inline void set_wrapped_stub(Code* value);
+  // [wrapped_code]: For kind TAINT_WRAPPER_IC tells what stub it wrapps.
+  inline Code* wrapped_code();
+  inline void set_wrapped_code(Code* value);
 
   // For kind STUB, major_key == CallFunction, tells whether there is
   // a function cache in the instruction stream.
@@ -4133,6 +4140,9 @@ class Code: public HeapObject {
 
   // Returns the address right after the last instruction.
   inline byte* instruction_end();
+
+  // Returns if addr points to Code's instruction space
+  inline bool instruction_contains(byte* addr);
 
   // Returns the size of the instructions, padding, and relocation information.
   inline int body_size();
@@ -4203,8 +4213,10 @@ class Code: public HeapObject {
       kHandlerTableOffset + kPointerSize;
   static const int kNextCodeFlushingCandidateOffset =
       kDeoptimizationDataOffset + kPointerSize;
-  static const int kFlagsOffset =
+  static const int kTaintWrapperOffset =
       kNextCodeFlushingCandidateOffset + kPointerSize;
+  static const int kFlagsOffset =
+      kTaintWrapperOffset + kPointerSize;
 
   static const int kKindSpecificFlagsOffset = kFlagsOffset + kIntSize;
   static const int kKindSpecificFlagsSize = 2 * kIntSize;
@@ -4222,13 +4234,13 @@ class Code: public HeapObject {
   static const int kOptimizableOffset = kKindSpecificFlagsOffset;
   static const int kStackSlotsOffset = kKindSpecificFlagsOffset;
   static const int kCheckTypeOffset = kKindSpecificFlagsOffset;
+  static const int kWrappedCodeOffset = kKindSpecificFlagsOffset;
 
   static const int kUnaryOpTypeOffset = kStubMajorKeyOffset + 1;
   static const int kBinaryOpTypeOffset = kStubMajorKeyOffset + 1;
   static const int kCompareStateOffset = kStubMajorKeyOffset + 1;
   static const int kToBooleanTypeOffset = kStubMajorKeyOffset + 1;
   static const int kHasFunctionCacheOffset = kStubMajorKeyOffset + 1;
-  static const int kWrappedStubOffset = kStubMajorKeyOffset + 1;
 
   static const int kFullCodeFlags = kOptimizableOffset + 1;
   class FullCodeFlagsHasDeoptimizationSupportField:

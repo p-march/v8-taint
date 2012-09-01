@@ -808,6 +808,11 @@ void HTaintResult::PrintDataTo(StringStream* stream) {
 }
 
 
+void HTaint::PrintDataTo(StringStream* stream) {
+  value()->PrintNameTo(stream);
+}
+
+
 void HChange::PrintDataTo(StringStream* stream) {
   HUnaryOperation::PrintDataTo(stream);
   stream->Add(" %s to %s", from().Mnemonic(), to().Mnemonic());

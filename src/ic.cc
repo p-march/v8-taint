@@ -136,6 +136,18 @@ IC::IC(FrameDepth depth, Isolate* isolate, TaintWrapperFlag taint)
 }
 
 
+void IC::SkipTaintWrapperIfPresent() {
+  if (target()->taint_wrapper()->IsCode()) {
+    Code* taint_wrapper = Code::cast(target()->taint_wrapper());
+    if (taint_wrapper->instruction_contains(*pc_address_)) {
+      pc_address_ = 
+        reinterpret_cast<Address*>(reinterpret_cast<Address>(pc_address_)
+                                   + TaintWrapperSkip());
+    }
+  }
+}
+
+
 #ifdef ENABLE_DEBUGGER_SUPPORT
 Address IC::OriginalCodeAddress() const {
   HandleScope scope;
@@ -319,6 +331,16 @@ void IC::Clear(Address address) {
       return;
     default: UNREACHABLE();
   }
+}
+
+
+Code* IC::GetTaintWrapper(Code* target) {
+  if (target->taint_wrapper()->IsCode()) {
+    return Code::cast(target->taint_wrapper());
+  }
+  Code* wrapper = *GenerateTaintWrapper(Handle<Code>(target));
+  target->set_taint_wrapper(wrapper);
+  return wrapper;
 }
 
 
@@ -897,10 +919,9 @@ MaybeObject* LoadIC::Load(State state,
 }
 
 
-Handle<Code> LoadIC::GetTaintWrapper(Handle<Code> target) {
+Handle<Code> LoadIC::GenerateTaintWrapper(Handle<Code> target) {
   LoadStubCompiler compiler(isolate());
-  Handle<Code> code = compiler.CompileTaintWrapper(target);
-  return code;
+  return compiler.CompileTaintWrapper(target);
 }
 
 
@@ -1164,10 +1185,9 @@ MaybeObject* KeyedLoadIC::Load(State state,
 }
 
 
-Handle<Code> KeyedLoadIC::GetTaintWrapper(Handle<Code> target) {
+Handle<Code> KeyedLoadIC::GenerateTaintWrapper(Handle<Code> target) {
   KeyedLoadStubCompiler compiler(isolate());
-  Handle<Code> code = compiler.CompileTaintWrapper(target);
-  return code;
+  return compiler.CompileTaintWrapper(target);
 }
 
 
@@ -1369,10 +1389,9 @@ MaybeObject* StoreIC::Store(State state,
 }
 
 
-Handle<Code> StoreIC::GetTaintWrapper(Handle<Code> target) {
+Handle<Code> StoreIC::GenerateTaintWrapper(Handle<Code> target) {
   StoreStubCompiler compiler(isolate());
-  Handle<Code> code = compiler.CompileTaintWrapper(target);
-  return code;
+  return compiler.CompileTaintWrapper(target);
 }
 
 
@@ -1757,10 +1776,9 @@ MaybeObject* KeyedStoreIC::Store(State state,
 }
 
 
-Handle<Code> KeyedStoreIC::GetTaintWrapper(Handle<Code> target) {
+Handle<Code> KeyedStoreIC::GenerateTaintWrapper(Handle<Code> target) {
   KeyedStoreStubCompiler compiler(isolate());
-  Handle<Code> code = compiler.CompileTaintWrapper(target);
-  return code;
+  return compiler.CompileTaintWrapper(target);
 }
 
 
@@ -1900,6 +1918,7 @@ RUNTIME_FUNCTION(MaybeObject*, LoadIC_Miss) {
   ASSERT_IF_TAINTED_ARG(1);
   HandleScope scope(isolate);
   ASSERT(args.length() == 2);
+  ASSERT(args.length() == LoadIC::kIC_MissArgs);
   LoadIC ic(isolate, static_cast<IC::TaintWrapperFlag>(HAS_TAINTED_ARGS()));
   bool taint_policy;
   IC::State state = IC::StateFrom(ic.target(), args[0], args[1]);
@@ -1920,6 +1939,7 @@ RUNTIME_FUNCTION(MaybeObject*, KeyedLoadIC_Miss) {
   ASSERT_IF_TAINTED_ARG(1);
   HandleScope scope(isolate);
   ASSERT(args.length() == 2);
+  ASSERT(args.length() == KeyedLoadIC::kIC_MissArgs);
   KeyedLoadIC ic(isolate, static_cast<IC::TaintWrapperFlag>(HAS_TAINTED_ARGS()));
   IC::State state = IC::StateFrom(ic.target(), args[0], args[1]);
   bool taint_policy;
@@ -1937,6 +1957,7 @@ RUNTIME_FUNCTION(MaybeObject*, KeyedLoadIC_MissForceGeneric) {
   ASSERT_IF_TAINTED_ARG(1);
   HandleScope scope(isolate);
   ASSERT(args.length() == 2);
+  ASSERT(args.length() == KeyedLoadIC::kIC_MissArgs);
   KeyedLoadIC ic(isolate, static_cast<IC::TaintWrapperFlag>(HAS_TAINTED_ARGS()));
   IC::State state = IC::StateFrom(ic.target(), args[0], args[1]);
   bool taint_policy;
@@ -1956,6 +1977,7 @@ RUNTIME_FUNCTION(MaybeObject*, StoreIC_Miss) {
   // NOTE(petr): do not untaint stored value (args[2])
   HandleScope scope;
   ASSERT(args.length() == 3);
+  ASSERT(args.length() == StoreIC::kIC_MissArgs);
   StoreIC ic(isolate, static_cast<IC::TaintWrapperFlag>(HAS_TAINTED_ARGS()));
   IC::State state = IC::StateFrom(ic.target(), args[0], args[1]);
   Code::ExtraICState extra_ic_state = ic.target()->extra_ic_state();
@@ -2030,7 +2052,9 @@ RUNTIME_FUNCTION(MaybeObject*, KeyedStoreIC_Miss) {
   // NOTE(petr): do not untaint stored value (args[2])
   HandleScope scope(isolate);
   ASSERT(args.length() == 3);
-  KeyedStoreIC ic(isolate, static_cast<IC::TaintWrapperFlag>(HAS_TAINTED_ARGS()));
+  ASSERT(args.length() == KeyedStoreIC::kIC_MissArgs);
+  KeyedStoreIC ic(isolate,
+                  static_cast<IC::TaintWrapperFlag>(HAS_TAINTED_ARGS()));
   IC::State state = IC::StateFrom(ic.target(), args[0], args[1]);
   Code::ExtraICState extra_ic_state = ic.target()->extra_ic_state();
   return ic.Store(state,
@@ -2125,7 +2149,7 @@ UnaryOpIC::TypeInfo UnaryOpIC::ComputeNewType(
     UnaryOpIC::TypeInfo current_type,
     UnaryOpIC::TypeInfo previous_type) {
   if (FLAG_taint_policy) {
-    // This may happen when using tainted data
+    // This may happen when processing tainted data
     if (current_type == previous_type) {
       return current_type;
     }
@@ -2146,6 +2170,12 @@ UnaryOpIC::TypeInfo UnaryOpIC::ComputeNewType(
   }
   UNREACHABLE();
   return UnaryOpIC::GENERIC;
+}
+
+
+Handle<Code> UnaryOpIC::GenerateTaintWrapper(Handle<Code> target) {
+  UnaryOpStubCompiler compiler(isolate());
+  return compiler.CompileTaintWrapper(target);
 }
 
 
@@ -2240,9 +2270,16 @@ BinaryOpIC::TypeInfo BinaryOpIC::GetTypeInfo(Handle<Object> left,
 }
 
 
+Handle<Code> BinaryOpIC::GenerateTaintWrapper(Handle<Code> target) {
+  BinaryOpStubCompiler compiler(isolate());
+  return compiler.CompileTaintWrapper(target);
+}
+
+
 RUNTIME_FUNCTION(MaybeObject*, UnaryOp_Patch) {
   UNTAINT_ALL_ARGS();
-  ASSERT(args.length() == 5);
+  ASSERT(args.length() == 4);
+  ASSERT(args.length() == UnaryOpIC::kIC_MissArgs);
 
   HandleScope scope(isolate);
   Handle<Object> operand = args.at<Object>(0);
@@ -2250,36 +2287,21 @@ RUNTIME_FUNCTION(MaybeObject*, UnaryOp_Patch) {
   UnaryOverwriteMode mode = static_cast<UnaryOverwriteMode>(args.smi_at(2));
   UnaryOpIC::TypeInfo previous_type =
       static_cast<UnaryOpIC::TypeInfo>(args.smi_at(3));
-  bool previous_taint_mode = static_cast<bool>(args.smi_at(4));
-  bool taint_mode = FLAG_taint_policy && FLAG_use_taint_spec &&
-                    (previous_taint_mode || HAS_TAINTED_ARGS());
 
   UnaryOpIC::TypeInfo type = UnaryOpIC::GetTypeInfo(operand);
   type = UnaryOpIC::ComputeNewType(type, previous_type);
 
-  ASSERT(previous_type != type || previous_taint_mode != taint_mode);
-
-  UnaryOpStub stub(op, mode, type, taint_mode);
-  TaintWrapperStub tw_stub(&stub);
-  Handle<Code> code = taint_mode ? tw_stub.GetCode() : stub.GetCode();
+  UnaryOpStub stub(op, mode, type);
+  Handle<Code> code = stub.GetCode();
   if (!code.is_null()) {
     if (FLAG_trace_ic) {
-      PrintF("[UnaryOpIC (%s%s->%s%s)#%s]\n",
+      PrintF("[UnaryOpIC (%s->%s)#%s]\n",
              UnaryOpIC::GetName(previous_type),
-             previous_taint_mode ? "-TW" : "",
              UnaryOpIC::GetName(type),
-             taint_mode ? "-TW" : "",
              Token::Name(op));
     }
-    UnaryOpIC ic(isolate);
-    if (previous_taint_mode) {
-#ifdef TAINT_FLAG
-      // TODO(petr): replace with constant
-      ic.advance_pc(6 * kPointerSize);
-#else
-      ic.advance_pc(7 * kPointerSize);
-#endif
-    }
+    UnaryOpIC ic(isolate,
+                 static_cast<IC::TaintWrapperFlag>(HAS_TAINTED_ARGS()));
     ic.patch(*code);
   }
 
@@ -2310,7 +2332,8 @@ RUNTIME_FUNCTION(MaybeObject*, UnaryOp_Patch) {
 
 RUNTIME_FUNCTION(MaybeObject*, BinaryOp_Patch) {
   UNTAINT_ALL_ARGS();
-  ASSERT(args.length() == 6);
+  ASSERT(args.length() == 5);
+  ASSERT(args.length() == BinaryOpIC::kIC_MissArgs);
 
   HandleScope scope(isolate);
   Handle<Object> left = args.at<Object>(0);
@@ -2319,9 +2342,6 @@ RUNTIME_FUNCTION(MaybeObject*, BinaryOp_Patch) {
   Token::Value op = static_cast<Token::Value>(args.smi_at(3));
   BinaryOpIC::TypeInfo previous_type =
       static_cast<BinaryOpIC::TypeInfo>(args.smi_at(4));
-  bool previous_taint_mode = static_cast<bool>(args.smi_at(5));
-  bool taint_mode = FLAG_taint_policy && FLAG_use_taint_spec &&
-                    (previous_taint_mode || HAS_TAINTED_ARGS());
 
   BinaryOpIC::TypeInfo type = BinaryOpIC::GetTypeInfo(left, right);
   type = BinaryOpIC::JoinTypes(type, previous_type);
@@ -2350,28 +2370,18 @@ RUNTIME_FUNCTION(MaybeObject*, BinaryOp_Patch) {
     result_type = BinaryOpIC::HEAP_NUMBER;
   }
 
-  BinaryOpStub stub(key, type, result_type, taint_mode);
-  TaintWrapperStub tw_stub(&stub);
-  Handle<Code> code = taint_mode ? tw_stub.GetCode() : stub.GetCode();
+  BinaryOpStub stub(key, type, result_type);
+  Handle<Code> code = stub.GetCode();
   if (!code.is_null()) {
     if (FLAG_trace_ic) {
-      PrintF("[BinaryOpIC (%s%s->(%s%s->%s))#%s]\n",
+      PrintF("[BinaryOpIC (%s->(%s->%s))#%s]\n",
              BinaryOpIC::GetName(previous_type),
-             previous_taint_mode ? "-TW" : "",
              BinaryOpIC::GetName(type),
-             taint_mode ? "-TW" : "",
              BinaryOpIC::GetName(result_type),
              Token::Name(op));
     }
-    BinaryOpIC ic(isolate);
-    if (previous_taint_mode) {
-#ifdef TAINT_FLAG
-      // TODO(petr): replace with constant
-      ic.advance_pc(7 * kPointerSize);
-#else
-      ic.advance_pc(8 * kPointerSize);
-#endif
-    }
+    BinaryOpIC ic(isolate,
+                  static_cast<IC::TaintWrapperFlag>(HAS_TAINTED_ARGS()));
     ic.patch(*code);
 
     // Activate inlined smi code.
@@ -2514,17 +2524,6 @@ RUNTIME_FUNCTION(MaybeObject*, ToBoolean_Patch) {
 
   ToBooleanStub stub(tos, new_types);
   Handle<Code> code = stub.GetCode();
-  if (FLAG_trace_ic) {
-    char old_types_name[ToBooleanStub::Types::kNameSize];
-    char new_types_name[ToBooleanStub::Types::kNameSize];
-    PrintF("[ToBooleanIC (%s->%s)]\n",
-           ToBooleanStub::Types::GetName(old_types,
-                                         old_types_name,
-                                         ToBooleanStub::Types::kNameSize),
-           ToBooleanStub::Types::GetName(new_types,
-                                         new_types_name,
-                                         ToBooleanStub::Types::kNameSize));
-  }
   ToBooleanIC ic(isolate);
   ic.patch(*code);
 

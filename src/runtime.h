@@ -527,6 +527,7 @@ namespace internal {
   F(GetCachedArrayIndex, 1, 1)                                               \
   F(FastAsciiArrayJoin, 2, 1)                                                \
   F(IsTainted, 1, 1)                                                         \
+  F(Taint, 1, 1)                                                             \
   F(TaintNot, 1, 1)
 
 

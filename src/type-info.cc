@@ -280,43 +280,38 @@ bool TypeFeedbackOracle::IsSymbolCompare(CompareOperation* expr) {
 
 TypeInfo TypeFeedbackOracle::UnaryType(UnaryOperation* expr) {
   Handle<Object> object = GetInfo(expr->id());
-  TypeInfo result = TypeInfo::Unknown();
-  if (!object->IsCode()) return result;
-  bool is_taint = Code::cast(*object)->is_taint_wrapper_stub();
-  Code *code_ptr =
-    is_taint ? Code::cast(*object)->wrapped_stub() : Code::cast(*object);
-  Handle<Code> code(code_ptr);
+  TypeInfo unknown = TypeInfo::Unknown();
+  if (!object->IsCode()) return unknown;
+
+  Handle<Code> code = Handle<Code>::cast(object);
+  if (code->is_taint_wrapper_stub()) {
+    code = Handle<Code>(code->wrapped_code());
+  }
+
   ASSERT(code->is_unary_op_stub());
   UnaryOpIC::TypeInfo type = static_cast<UnaryOpIC::TypeInfo>(
       code->unary_op_type());
   switch (type) {
     case UnaryOpIC::SMI:
-      result = TypeInfo::Smi();
-      break;
+      return TypeInfo::Smi();
     case UnaryOpIC::HEAP_NUMBER:
-      result = TypeInfo::Double();
-      break;
-    case UnaryOpIC::UNINITIALIZED:
-    case UnaryOpIC::GENERIC:
-      break;
+      return TypeInfo::Double();
+    default:
+      return unknown;
   }
-
-  if (is_taint) {
-    result.SetTaint();
-  }
-
-  return result;
 }
 
 
 TypeInfo TypeFeedbackOracle::BinaryType(BinaryOperation* expr) {
   Handle<Object> object = GetInfo(expr->id());
-  TypeInfo result = TypeInfo::Unknown();
-  if (!object->IsCode()) return result;
-  bool is_taint = Code::cast(*object)->is_taint_wrapper_stub();
-  Code *code_ptr =
-    is_taint ? Code::cast(*object)->wrapped_stub() : Code::cast(*object);
-  Handle<Code> code(code_ptr);
+  TypeInfo unknown = TypeInfo::Unknown();
+  if (!object->IsCode()) return unknown;
+
+  Handle<Code> code = Handle<Code>::cast(object);
+  if (code->is_taint_wrapper_stub()) {
+    code = Handle<Code>(code->wrapped_code());
+  }
+
   if (code->is_binary_op_stub()) {
     BinaryOpIC::TypeInfo type = static_cast<BinaryOpIC::TypeInfo>(
         code->binary_op_type());
@@ -326,53 +321,37 @@ TypeInfo TypeFeedbackOracle::BinaryType(BinaryOperation* expr) {
     switch (type) {
       case BinaryOpIC::UNINITIALIZED:
         // Uninitialized means never executed.
-        result = TypeInfo::Uninitialized();
-        break;
+        return TypeInfo::Uninitialized();
       case BinaryOpIC::SMI:
         switch (result_type) {
           case BinaryOpIC::UNINITIALIZED:
           case BinaryOpIC::SMI:
-            result = TypeInfo::Smi();
-            break;
+            return TypeInfo::Smi();
           case BinaryOpIC::INT32:
-            result = TypeInfo::Integer32();
-            break;
+            return TypeInfo::Integer32();
           case BinaryOpIC::HEAP_NUMBER:
-            result = TypeInfo::Double();
-            break;
-          case BinaryOpIC::ODDBALL:
-          case BinaryOpIC::STRING:
-          case BinaryOpIC::BOTH_STRING:
-          case BinaryOpIC::GENERIC:
-            break;
+            return TypeInfo::Double();
+          default:
+            return unknown;
         }
-        break;
       case BinaryOpIC::INT32:
         if (expr->op() == Token::DIV ||
             result_type == BinaryOpIC::HEAP_NUMBER) {
-          result = TypeInfo::Double();
-          break;
+          return TypeInfo::Double();
         }
-        result = TypeInfo::Integer32();
-        break;
+        return TypeInfo::Integer32();
       case BinaryOpIC::HEAP_NUMBER:
-        result = TypeInfo::Double();
-        break;
+        return TypeInfo::Double();
       case BinaryOpIC::BOTH_STRING:
-        result = TypeInfo::String();
-        break;
-      case BinaryOpIC::ODDBALL:
+        return TypeInfo::String();
       case BinaryOpIC::STRING:
       case BinaryOpIC::GENERIC:
-        break;
+        return unknown;
+     default:
+        return unknown;
     }
   }
-
-  if (is_taint) {
-    result.SetTaint();
-  }
-
-  return result;
+  return unknown;
 }
 
 
@@ -409,39 +388,43 @@ TypeInfo TypeFeedbackOracle::SwitchType(CaseClause* clause) {
 
 TypeInfo TypeFeedbackOracle::IncrementType(CountOperation* expr) {
   Handle<Object> object = GetInfo(expr->CountId());
-  TypeInfo result = TypeInfo::Unknown();
-  if (!object->IsCode()) return result;
-  bool is_taint = Code::cast(*object)->is_taint_wrapper_stub();
-  Code *code_ptr =
-    is_taint ? Code::cast(*object)->wrapped_stub() : Code::cast(*object);
-  Handle<Code> code(code_ptr);
-  if (!code->is_binary_op_stub()) return result;
+  TypeInfo unknown = TypeInfo::Unknown();
+  if (!object->IsCode()) return unknown;
+
+  Handle<Code> code = Handle<Code>::cast(object);
+  if (code->is_taint_wrapper_stub()) {
+    code = Handle<Code>(code->wrapped_code());
+  }
+
+  if (!code->is_binary_op_stub()) return unknown;
 
   BinaryOpIC::TypeInfo type = static_cast<BinaryOpIC::TypeInfo>(
       code->binary_op_type());
   switch (type) {
     case BinaryOpIC::UNINITIALIZED:
     case BinaryOpIC::SMI:
-      result = TypeInfo::Smi();
-      break;
+      return TypeInfo::Smi();
     case BinaryOpIC::INT32:
-      result = TypeInfo::Integer32();
-      break;
+      return TypeInfo::Integer32();
     case BinaryOpIC::HEAP_NUMBER:
-      result = TypeInfo::Double();
-      break;
-    case BinaryOpIC::ODDBALL:
+      return TypeInfo::Double();
     case BinaryOpIC::BOTH_STRING:
     case BinaryOpIC::STRING:
     case BinaryOpIC::GENERIC:
-      break;
+      return unknown;
+    default:
+      return unknown;
   }
+  UNREACHABLE();
+  return unknown;
+}
 
-  if (is_taint) {
-    result.SetTaint();
-  }
 
-  return result;
+bool TypeFeedbackOracle::HasTaintWrapper(Expression* expr) {
+  Handle<Object> object = GetInfo(expr->id());
+  if (!object->IsCode()) return false;
+  Handle<Code> code = Handle<Code>::cast(object);
+  return code->is_taint_wrapper_stub();
 }
 
 

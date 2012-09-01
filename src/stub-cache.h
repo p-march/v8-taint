@@ -490,7 +490,6 @@ class StubCompiler BASE_EMBEDDED {
   Handle<Code> GetTaintWrapperCode(Handle<Code> target);
   Handle<Code> GenerateTaintWrapper(Handle<Code> target,
                                     bool taint_result,
-                                    Register receiver,
                                     Register scratch1,
                                     Register scratch2);
 
@@ -824,6 +823,24 @@ class ConstructStubCompiler: public StubCompiler {
 
  private:
   Handle<Code> GetCode();
+};
+
+
+class UnaryOpStubCompiler: public StubCompiler {
+ public:
+  UnaryOpStubCompiler(Isolate* isolate)
+    : StubCompiler(isolate) { }
+
+  Handle<Code> CompileTaintWrapper(Handle<Code> target);
+};
+
+
+class BinaryOpStubCompiler: public StubCompiler {
+ public:
+  BinaryOpStubCompiler(Isolate* isolate)
+    : StubCompiler(isolate) { }
+
+  Handle<Code> CompileTaintWrapper(Handle<Code> target);
 };
 
 

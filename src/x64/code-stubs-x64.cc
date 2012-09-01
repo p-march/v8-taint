@@ -689,14 +689,13 @@ void UnaryOpStub::GenerateTypeTransition(MacroAssembler* masm) {
   __ Push(Smi::FromInt(op_));
   __ Push(Smi::FromInt(mode_));
   __ Push(Smi::FromInt(operand_type_));
-  __ Push(Smi::FromInt(taint_mode_));
 
   __ push(rcx);  // Push return address.
 
   // Patch the caller to an appropriate specialized stub and return the
   // operation result to the caller of the stub.
   __ TailCallExternalReference(
-      ExternalReference(IC_Utility(IC::kUnaryOp_Patch), masm->isolate()), 5, 1);
+      ExternalReference(IC_Utility(IC::kUnaryOp_Patch), masm->isolate()), 4, 1);
 }
 
 
@@ -928,7 +927,6 @@ void BinaryOpStub::GenerateTypeTransition(MacroAssembler* masm) {
   __ Push(Smi::FromInt(MinorKey()));
   __ Push(Smi::FromInt(op_));
   __ Push(Smi::FromInt(operands_type_));
-  __ Push(Smi::FromInt(taint_mode_));
 
   __ push(rcx);  // Push return address.
 
@@ -937,7 +935,7 @@ void BinaryOpStub::GenerateTypeTransition(MacroAssembler* masm) {
   __ TailCallExternalReference(
       ExternalReference(IC_Utility(IC::kBinaryOp_Patch),
                         masm->isolate()),
-      6,
+      5,
       1);
 }
 
@@ -3488,69 +3486,6 @@ void CompareStub::BranchIfNonSymbol(MacroAssembler* masm,
 
 void StackCheckStub::Generate(MacroAssembler* masm) {
   __ TailCallRuntime(Runtime::kStackGuard, 0, 1);
-}
-
-
-void TaintWrapperStub::Generate(MacroAssembler* masm) {
-  Register left = rdx;
-  Register right = rax;
-
-  Comment untaint_comment(masm, "-- Untaint arguments");
-  __ ClearTaintFlag();
-  __ UntaintWithFlag(right);
-  // TODO(petr): figure out a better solution than to check stub keys
-  if (target_stub_->MajorKey() == BinaryOp) {
-    __ UntaintWithFlag(left);
-  }
-
-  __ Call(target_code_, RelocInfo::CODE_TARGET, kNoASTId);
-  // This nop is to allow repatching of the target stub
-  __ nop();
-
-  Register result = rax;
-  Label done, slow;
-
-  Comment taint_result_comment(masm, "-- Taint result");
-  if (!FLAG_taint_result) {
-#ifndef TAINT_FLAG
-    __ pop(kScratchRegister); // pop taint flag from the stack
-#endif
-    __ jmp(&done);
-  }
-  __ JumpIfTaintFlagNotSet(&done);
-  __ JumpIfTainted(result, &done);
-
-#if DEBUG
-  Label primitive;
-  __ JumpIfSmi(result, &primitive);
-  __ CmpObjectType(result, FIRST_SPEC_OBJECT_TYPE, rcx);
-  __ j(below, &primitive);
-  // NOTE(petr): no JSObjects should be returned by target stubs
-  __ Abort("Operand is a JSObject");
-  __ bind(&primitive);
-#endif
-
-  __ AllocateTainted(rcx, rbx, FLAG_taint_result_slow ? &slow : &done);
-  __ movq(FieldOperand(rcx, Tainted::kObjectOffset), result);
-  __ movq(result, rcx);
-  __ jmp(&done);
-
-  __ bind(&slow);
-  {
-    FrameScope scope(masm, StackFrame::INTERNAL);
-    __ push(result);
-    __ CallRuntime(Runtime::kTaint, 1);
-  }
-
-  __ bind(&done);
-  __ ret(0);
-}
-
-
-void TaintWrapperStub::PrintName(StringStream* stream) {
-  stream->Add("TaintWrapperStub(");
-  target_stub_->PrintName(stream);
-  stream->Add(")");
 }
 
 

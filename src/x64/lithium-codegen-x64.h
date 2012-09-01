@@ -102,6 +102,7 @@ class LCodeGen BASE_EMBEDDED {
   void DoDeferredInstanceOfKnownGlobal(LInstanceOfKnownGlobal* instr,
                                        Label* map_check);
   void DoDeferredTaintResult(LTaintResult* instr);
+  void DoDeferredTaint(LTaint* instr);
 
   // Parallel move support.
   void DoParallelMove(LParallelMove* move);

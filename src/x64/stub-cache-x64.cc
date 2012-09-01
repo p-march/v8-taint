@@ -1174,18 +1174,8 @@ void StubCompiler::GenerateLoadInterceptor(Handle<JSObject> object,
 
 Handle<Code> StubCompiler::GenerateTaintWrapper(Handle<Code> target,
                                                 bool taint_result,
-                                                Register receiver,
                                                 Register scratch1,
                                                 Register scratch2) {
-  Comment untaint_comment(masm(), "-- Untaint receiver");
-
-  if (taint_result) {
-    __ ClearTaintFlag();
-    __ UntaintWithFlag(receiver);
-  } else {
-    __ Untaint(receiver);
-  }
-
   ASSERT(!target.is_null());
   __ Call(target, RelocInfo::CODE_TARGET, kNoASTId);
   // This nop is to allow repatching of the target stub
@@ -1204,26 +1194,9 @@ Handle<Code> StubCompiler::GenerateTaintWrapper(Handle<Code> target,
     }
 
     __ JumpIfTaintFlagNotSet(&done);
-#ifdef DEBUG
-    {
-      Label ok;
-      __ JumpIfNotTainted(result, &ok, Label::kNear);
-      __ Abort("StubCompiler: result should not be tainted");
-      __ bind(&ok);
-    }
-#endif
-
-    Label primitive, slow;
-    __ JumpIfSmi(result, &primitive, Label::kNear);
-    __ CmpObjectType(result, FIRST_SPEC_OBJECT_TYPE, scratch1);
-    __ j(above_equal, FLAG_taint_result_slow ? &slow : &done);
-    __ bind(&primitive);
-
-    __ AllocateTainted(scratch1, scratch2, FLAG_taint_result_slow ? &slow : &done);
-    __ movq(FieldOperand(scratch1, Tainted::kObjectOffset), result);
-    __ movq(result, scratch1);
+    Label slow;
+    __ Taint(result, scratch1, scratch2, scratch1, &slow, false);
     __ jmp(&done);
-
     __ bind(&slow);
     {
       FrameScope scope(masm(), StackFrame::INTERNAL);
@@ -2487,8 +2460,12 @@ Handle<Code> StoreStubCompiler::CompileTaintWrapper(Handle<Code> target) {
   __ Abort("StoreStubCompiler: name should not be tainted");
   __ bind(&ok);
 #endif
-  
-  return GenerateTaintWrapper(target, false, rdx, rbx, rdi);
+
+  ASSERT(StoreIC::kUseTaintFalg == 0);
+  Comment untaint_comment(masm(), "-- StoreStubTaintWrapper: Untaint value");
+  __ Untaint(rdx);
+ 
+  return GenerateTaintWrapper(target, false, rbx, rdi);
 }
 
 
@@ -2602,8 +2579,12 @@ Handle<Code> KeyedStoreStubCompiler::CompileTaintWrapper(Handle<Code> target) {
   __ Abort("KeyedStoreStubCompiler: key should not be tainted");
   __ bind(&ok);
 #endif
+
+  ASSERT(KeyedStoreIC::kUseTaintFalg == 0);
+  Comment untaint_comment(masm(), "-- KeyedStoreStubTaintWrapper: Untaint value");
+  __ Untaint(rdx);
   
-  return GenerateTaintWrapper(target, false, rdx, rbx, rdi);
+  return GenerateTaintWrapper(target, false, rbx, rdi);
 }
 
 
@@ -2659,8 +2640,13 @@ Handle<Code> LoadStubCompiler::CompileTaintWrapper(Handle<Code> target) {
   __ Abort("LoadStubCompiler: name should not be tainted");
   __ bind(&ok);
 #endif
+
+  ASSERT(LoadIC::kUseTaintFalg == 1);
+  Comment untaint_comment(masm(), "-- LoadStubTaintWrapper: Untaint value");
+  __ ClearTaintFlag();
+  __ UntaintWithFlag(rax);
   
-  return GenerateTaintWrapper(target, true, rax, rbx, rdx);
+  return GenerateTaintWrapper(target, true, rbx, rdx);
 }
 
 
@@ -3187,7 +3173,42 @@ Handle<Code> KeyedLoadStubCompiler::CompileTaintWrapper(Handle<Code> target) {
   __ bind(&ok);
 #endif
 
-  return GenerateTaintWrapper(target, true, rdx, rbx, rcx);
+  ASSERT(KeyedLoadIC::kUseTaintFalg == 1);
+  Comment untaint_comment(masm(), "-- KeyedLoadStubTaintWrapper: Untaint value");
+  __ ClearTaintFlag();
+  __ UntaintWithFlag(rdx);
+
+  return GenerateTaintWrapper(target, true, rbx, rcx);
+}
+
+
+Handle<Code> UnaryOpStubCompiler::CompileTaintWrapper(Handle<Code> target) {
+  // ----------- S t a t e -------------
+  //  -- rax    : value
+  // -----------------------------------
+
+  ASSERT(UnaryOpIC::kUseTaintFalg == 1);
+  Comment untaint_comment(masm(), "-- UnaryOpStubTaintWrapper: Untaint value");
+  __ ClearTaintFlag();
+  __ UntaintWithFlag(rax);
+
+  return GenerateTaintWrapper(target, true, rbx, rcx);
+}
+
+
+Handle<Code> BinaryOpStubCompiler::CompileTaintWrapper(Handle<Code> target) {
+  // ----------- S t a t e -------------
+  //  -- rax    : value 1
+  //  -- rdx    : value 2
+  // -----------------------------------
+
+  ASSERT(BinaryOpIC::kUseTaintFalg == 1);
+  Comment untaint_comment(masm(), "-- BinaryOpStubTaintWrapper: Untaint value");
+  __ ClearTaintFlag();
+  __ UntaintWithFlag(rax);
+  __ UntaintWithFlag(rdx);
+
+  return GenerateTaintWrapper(target, true, rbx, rcx);
 }
 
 

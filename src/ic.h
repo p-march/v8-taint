@@ -141,11 +141,6 @@ class IC {
   static inline JSObject* GetCodeCacheHolder(Object* object,
                                              InlineCacheHolderFlag holder);
 
-  void advance_pc(int value) {
-    pc_address_ = reinterpret_cast<Address*>(
-      reinterpret_cast<uintptr_t>(pc_address_) + value);
-  }
-
  protected:
   Address fp() const { return fp_; }
   Address pc() const { return *pc_address_; }
@@ -157,15 +152,25 @@ class IC {
   Address OriginalCodeAddress() const;
 #endif
 
-  virtual Handle<Code> GetTaintWrapper(Handle<Code> target) {
+  Code* GetTaintWrapper(Code *target);
+
+  virtual Handle<Code> GenerateTaintWrapper(Handle<Code> target) {
     UNIMPLEMENTED();
     return Handle<Code>();
   }
 
+  virtual int TaintWrapperSkip() {
+    UNIMPLEMENTED();
+    return 0;
+  }
+
+  void SkipTaintWrapperIfPresent();
+
   // Set the call-site target.
   void set_target(Code* code) {
+    SkipTaintWrapperIfPresent();
     if (FLAG_use_taint_spec && taint_flag_ == TAINT_WRAPPER) {
-      code = *GetTaintWrapper(Handle<Code>(code));
+      code = GetTaintWrapper(code);
     }
     SetTargetAtAddress(address(), code);
   }
@@ -354,6 +359,12 @@ class LoadIC: public IC {
                                     Handle<String> name,
                                     bool* taint_policy);
 
+  static const int kIC_MissArgs = 2;
+  static const int kUseTaintFalg = 1;
+  // + 1 is ret addr of taint wrapper stub
+  static const int kTaintWrapperSkip =
+      (kIC_MissArgs + kUseTaintFalg + 1) * kPointerSize;
+
   // Code generator routines.
   static void GenerateInitialize(MacroAssembler* masm) { GenerateMiss(masm); }
   static void GeneratePreMonomorphic(MacroAssembler* masm) {
@@ -369,9 +380,13 @@ class LoadIC: public IC {
                                    bool support_wrappers);
   static void GenerateFunctionPrototype(MacroAssembler* masm);
 
- private:
-  virtual Handle<Code> GetTaintWrapper(Handle<Code> target);
+ protected:
+  virtual int TaintWrapperSkip() { return kTaintWrapperSkip; }
 
+  virtual Handle<Code> GenerateTaintWrapper(Handle<Code> target);
+
+ private:
+  
   // Update the inline cache and the global stub cache based on the
   // lookup result.
   void UpdateCaches(LookupResult* lookup,
@@ -457,6 +472,12 @@ class KeyedLoadIC: public KeyedIC {
     ASSERT(target()->is_keyed_load_stub());
   }
 
+  static const int kIC_MissArgs = 2;
+  static const int kUseTaintFalg = 1;
+  // + 1 is ret addr of taint wrapper stub
+  static const int kTaintWrapperSkip =
+      (kIC_MissArgs + kUseTaintFalg + 1) * kPointerSize;
+
   MUST_USE_RESULT MaybeObject* Load(State state,
                                     Handle<Object> object,
                                     Handle<Object> key,
@@ -501,10 +522,12 @@ class KeyedLoadIC: public KeyedIC {
   virtual Handle<Code> string_stub() {
     return isolate()->builtins()->KeyedLoadIC_String();
   }
+ 
+  virtual int TaintWrapperSkip() { return kTaintWrapperSkip; }
+
+  virtual Handle<Code> GenerateTaintWrapper(Handle<Code> target);
 
  private:
-  virtual Handle<Code> GetTaintWrapper(Handle<Code> target);
-
   // Update the inline cache.
   void UpdateCaches(LookupResult* lookup,
                     State state,
@@ -545,6 +568,12 @@ class StoreIC: public IC {
     ASSERT(target()->is_store_stub());
   }
 
+  static const int kIC_MissArgs = 3;
+  static const int kUseTaintFalg = 0;
+  // + 1 is ret addr of taint wrapper stub
+  static const int kTaintWrapperSkip =
+      (kIC_MissArgs + kUseTaintFalg + 1) * kPointerSize;
+
   MUST_USE_RESULT MaybeObject* Store(State state,
                                      StrictModeFlag strict_mode,
                                      Handle<Object> object,
@@ -561,9 +590,12 @@ class StoreIC: public IC {
   static void GenerateGlobalProxy(MacroAssembler* masm,
                                   StrictModeFlag strict_mode);
 
- private:
-  virtual Handle<Code> GetTaintWrapper(Handle<Code> target);
+ protected:
+  virtual int TaintWrapperSkip() { return kTaintWrapperSkip; }
 
+  virtual Handle<Code> GenerateTaintWrapper(Handle<Code> target);
+
+ private:
   // Update the inline cache and the global stub cache based on the
   // lookup result.
   void UpdateCaches(LookupResult* lookup,
@@ -617,6 +649,12 @@ class KeyedStoreIC: public KeyedIC {
     ASSERT(target()->is_keyed_store_stub());
   }
 
+  static const int kIC_MissArgs = 3;
+  static const int kUseTaintFalg = 0;
+  // + 1 is ret addr of taint wrapper stub
+  static const int kTaintWrapperSkip =
+      (kIC_MissArgs + kUseTaintFalg + 1) * kPointerSize;
+
   MUST_USE_RESULT MaybeObject* Store(State state,
                                    StrictModeFlag strict_mode,
                                      Handle<Object> object,
@@ -652,9 +690,12 @@ class KeyedStoreIC: public KeyedIC {
   virtual Handle<Code> ComputePolymorphicStub(MapHandleList* receiver_maps,
                                               StrictModeFlag strict_mode);
 
- private:
-  virtual Handle<Code> GetTaintWrapper(Handle<Code> target);
+ protected:
+  virtual int TaintWrapperSkip() { return kTaintWrapperSkip; }
 
+  virtual Handle<Code> GenerateTaintWrapper(Handle<Code> target);
+
+ private:
   // Update the inline cache.
   void UpdateCaches(LookupResult* lookup,
                     State state,
@@ -712,7 +753,14 @@ class UnaryOpIC: public IC {
     GENERIC
   };
 
-  explicit UnaryOpIC(Isolate* isolate) : IC(NO_EXTRA_FRAME, isolate) { }
+  explicit UnaryOpIC(Isolate* isolate, TaintWrapperFlag flag)
+      : IC(NO_EXTRA_FRAME, isolate, flag) { }
+
+  static const int kIC_MissArgs = 4;
+  static const int kUseTaintFalg = 1;
+  // + 1 is ret addr of taint wrapper stub
+  static const int kTaintWrapperSkip =
+      (kIC_MissArgs + kUseTaintFalg + 1) * kPointerSize;
 
   void patch(Code* code);
 
@@ -723,6 +771,11 @@ class UnaryOpIC: public IC {
   static TypeInfo GetTypeInfo(Handle<Object> operand);
 
   static TypeInfo ComputeNewType(TypeInfo type, TypeInfo previous);
+
+ protected:
+  virtual int TaintWrapperSkip() { return kTaintWrapperSkip; }
+
+  virtual Handle<Code> GenerateTaintWrapper(Handle<Code> target);
 };
 
 
@@ -740,7 +793,14 @@ class BinaryOpIC: public IC {
     GENERIC
   };
 
-  explicit BinaryOpIC(Isolate* isolate) : IC(NO_EXTRA_FRAME, isolate) { }
+  static const int kIC_MissArgs = 5;
+  static const int kUseTaintFalg = 1;
+  // + 1 is ret addr of taint wrapper stub
+  static const int kTaintWrapperSkip =
+      (kIC_MissArgs + kUseTaintFalg + 1) * kPointerSize;
+
+  explicit BinaryOpIC(Isolate* isolate, TaintWrapperFlag flag)
+      : IC(NO_EXTRA_FRAME, isolate, flag) { }
 
   void patch(Code* code);
 
@@ -751,6 +811,11 @@ class BinaryOpIC: public IC {
   static TypeInfo GetTypeInfo(Handle<Object> left, Handle<Object> right);
 
   static TypeInfo JoinTypes(TypeInfo x, TypeInfo y);
+
+ protected:
+  virtual int TaintWrapperSkip() { return kTaintWrapperSkip; }
+
+  virtual Handle<Code> GenerateTaintWrapper(Handle<Code> target);
 };
 
 

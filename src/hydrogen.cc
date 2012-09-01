@@ -5469,18 +5469,18 @@ void HGraphBuilder::VisitTypeof(UnaryOperation* expr) {
 
 void HGraphBuilder::VisitAdd(UnaryOperation* expr) {
   CHECK_ALIVE(VisitForValue(expr->expression()));
-  TypeInfo info = oracle()->UnaryType(expr);
+  bool taint_enabled = oracle()->HasTaintWrapper(expr);
   HValue* value = Pop();
   HValue* context = environment()->LookupContext();
 
-  if (info.IsTaint()) {
+  if (taint_enabled) {
     value = AddInstruction(new(zone()) HUntaintWithFlag(value));
   }
 
   HInstruction* instr =
       new(zone()) HMul(context, value, graph_->GetConstant1());
 
-  if (info.IsTaint()) {
+  if (taint_enabled) {
     HInstruction* temp = AddInstruction(instr);
     if (instr->HasObservableSideEffects())
       AddSimulate(expr->id());
@@ -5496,16 +5496,18 @@ void HGraphBuilder::VisitSub(UnaryOperation* expr) {
   HValue* value = Pop();
   HValue* context = environment()->LookupContext();
   TypeInfo info = oracle()->UnaryType(expr);
+  bool taint_enabled = oracle()->HasTaintWrapper(expr);
 
-  ASSERT(!(info.IsUninitialized() && info.IsTaint()));
-
-  if (info.IsTaint()) {
-    value = AddInstruction(new(zone()) HUntaintWithFlag(value));
-  } else if (info.IsUninitialized()) {
+  if (info.IsUninitialized()) {
     AddInstruction(new(zone()) HSoftDeoptimize);
     current_block()->MarkAsDeoptimizing();
     info = TypeInfo::Unknown();
   }
+
+  if (taint_enabled) {
+    value = AddInstruction(new(zone()) HUntaintWithFlag(value));
+  }
+
 
   HInstruction* instr =
       new(zone()) HMul(context, value, graph_->GetConstantMinus1());
@@ -5514,7 +5516,7 @@ void HGraphBuilder::VisitSub(UnaryOperation* expr) {
   TraceRepresentation(expr->op(), info, instr, rep);
   instr->AssumeRepresentation(rep);
 
-  if (info.IsTaint()) {
+  if (taint_enabled) {
     HInstruction* temp = AddInstruction(instr);
     if (instr->HasObservableSideEffects())
       AddSimulate(expr->id());
@@ -5529,19 +5531,21 @@ void HGraphBuilder::VisitBitNot(UnaryOperation* expr) {
   CHECK_ALIVE(VisitForValue(expr->expression()));
   HValue* value = Pop();
   TypeInfo info = oracle()->UnaryType(expr);
+  bool taint_enabled = oracle()->HasTaintWrapper(expr);
 
-  ASSERT(!(info.IsUninitialized() && info.IsTaint()));
-
-  if (info.IsTaint()) {
-    value = AddInstruction(new(zone()) HUntaintWithFlag(value));
-  } else if (info.IsUninitialized()) {
+  if (info.IsUninitialized()) {
     AddInstruction(new(zone()) HSoftDeoptimize);
     current_block()->MarkAsDeoptimizing();
   }
 
+  if (taint_enabled) {
+    value = AddInstruction(new(zone()) HUntaintWithFlag(value));
+  }
+
+
   HInstruction* instr = new(zone()) HBitNot(value);
 
-  if (info.IsTaint()) {
+  if (taint_enabled) {
     HInstruction* temp = AddInstruction(instr);
     if (instr->HasObservableSideEffects())
       AddSimulate(expr->id());
@@ -5600,10 +5604,11 @@ HInstruction* HGraphBuilder::BuildIncrement(bool returns_original_input,
                                             CountOperation* expr) {
   // The input to the count operation is on top of the expression stack.
   TypeInfo info = oracle()->IncrementType(expr);
+  bool taint_enabled = oracle()->HasTaintWrapper(expr);
   Representation rep = ToRepresentation(info);
   HValue* value = NULL;
 
-  if (rep.IsTagged()) {
+  if (!taint_enabled && rep.IsTagged()) {
     rep = Representation::Integer32();
   }
 
@@ -5613,7 +5618,7 @@ HInstruction* HGraphBuilder::BuildIncrement(bool returns_original_input,
     // phase, so it is not available now to be used as an input to HAdd and
     // as the return value.
     value = Pop();
-    if (info.IsTaint()) {
+    if (taint_enabled) {
       value = AddInstruction(new(zone()) HUntaintWithFlag(value));
     }
     HInstruction* number_input = new(zone()) HForceRepresentation(value, rep);
@@ -5622,7 +5627,7 @@ HInstruction* HGraphBuilder::BuildIncrement(bool returns_original_input,
     value = Top();
   } else {
     value = Top();
-    if (info.IsTaint()) {
+    if (taint_enabled) {
       value = AddInstruction(new(zone()) HUntaintWithFlag(value));
     }
   }
@@ -5640,7 +5645,7 @@ HInstruction* HGraphBuilder::BuildIncrement(bool returns_original_input,
   TraceRepresentation(expr->op(), info, instr, rep);
   instr->AssumeRepresentation(rep);
 
-  if (info.IsTaint()) {
+  if (taint_enabled) {
     HInstruction* temp = AddInstruction(instr);
     if (instr->HasObservableSideEffects())
       AddSimulate(expr->id());
@@ -5823,6 +5828,7 @@ HInstruction* HGraphBuilder::BuildBinaryOperation(BinaryOperation* expr,
                                                   HValue* right) {
   HValue* context = environment()->LookupContext();
   TypeInfo info = oracle()->BinaryType(expr);
+  bool taint_enabled = oracle()->HasTaintWrapper(expr);
   if (info.IsUninitialized()) {
     AddInstruction(new(zone()) HSoftDeoptimize);
     current_block()->MarkAsDeoptimizing();
@@ -5830,7 +5836,7 @@ HInstruction* HGraphBuilder::BuildBinaryOperation(BinaryOperation* expr,
   }
   HInstruction* instr = NULL;
 
-  if (info.IsTaint()) {
+  if (taint_enabled) {
     if (!left->IsConstant()) {
       left = AddInstruction(new(zone()) HUntaintWithFlag(left));
       if (!right->IsConstant()) {
@@ -5900,12 +5906,11 @@ HInstruction* HGraphBuilder::BuildBinaryOperation(BinaryOperation* expr,
     instr->AssumeRepresentation(rep);
   }
 
-  if (info.IsTaint()) {
+  if (taint_enabled) {
     HInstruction* temp = AddInstruction(instr);
     if (instr->HasObservableSideEffects())
       AddSimulate(expr->id());
     instr = new(zone()) HTaintResult(temp);
-    info.SetTaint();
   }
 
   return instr;
@@ -6460,6 +6465,15 @@ void HGraphBuilder::GenerateIsTainted(CallRuntime* call) {
   HHasInstanceTypeAndBranch* result =
       new(zone()) HHasInstanceTypeAndBranch(value, TAINTED_TYPE);
   return ast_context()->ReturnControl(result, call->id());
+}
+
+
+void HGraphBuilder::GenerateTaint(CallRuntime* call) {
+  ASSERT(call->arguments()->length() == 1);
+  CHECK_ALIVE(VisitForValue(call->arguments()->at(0)));
+  HValue* value = Pop();
+  HTaint* result = new(zone()) HTaint(value);
+  return ast_context()->ReturnInstruction(result, call->id());
 }
 
 

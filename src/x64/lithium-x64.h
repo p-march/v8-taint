@@ -173,6 +173,7 @@ class LCodeGen;
   V(ValueOf)                                    \
   V(UntaintWithFlag)                            \
   V(Untaint)                                    \
+  V(Taint)                                      \
   V(TaintResult)
 
 
@@ -1917,6 +1918,18 @@ class LTaintResult: public LTemplateInstruction<1, 1, 1> {
   }
 
   DECLARE_CONCRETE_INSTRUCTION(TaintResult, "taint-result")
+};
+
+
+class LTaint: public LTemplateInstruction<1, 1, 2> {
+ public:
+  explicit LTaint(LOperand* value, LOperand* temp1, LOperand* temp2) {
+    inputs_[0] = value;
+    temps_[0] = temp1;
+    temps_[1] = temp2;
+  }
+
+  DECLARE_CONCRETE_INSTRUCTION(Taint, "taint")
 };
 
 

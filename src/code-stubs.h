@@ -214,7 +214,6 @@ class CodeStub BASE_EMBEDDED {
   class MinorKeyBits: public BitField<uint32_t, kMajorBits, kMinorBits> {};
 
   friend class BreakPointIterator;
-  friend class TaintWrapperStub;
 };
 
 
@@ -284,40 +283,6 @@ class StackCheckStub : public CodeStub {
  private:
   Major MajorKey() { return StackCheck; }
   int MinorKey() { return 0; }
-};
-
-
-class TaintWrapperStub : public CodeStub {
- public:
-  TaintWrapperStub(CodeStub* target_stub)
-    : target_stub_(target_stub),
-      target_code_(target_stub_->GetCode()) {
-    ASSERT(target_stub);
-    ASSERT(!target_code_.is_null());
-  }
-
-  void Generate(MacroAssembler* masm);
-
- private:
-  virtual void PrintName(StringStream* stream);
-
-  virtual int GetCodeKind() { return Code::TAINT_WRAPPER_IC; }
-
-  Major MajorKey() { return TaintWrapper; }
-  int MinorKey() {
-    // A full key of a target stub is used as minor key
-    // Make sure that the full key fits in kMinorBits
-    ASSERT(!(target_stub_->GetKey() >> kMinorBits));
-    return target_stub_->GetKey();
-  }
-
-  virtual void FinishCode(Handle<Code> code) {
-    ASSERT(!target_code_.is_null());
-    code->set_wrapped_stub(*target_code_);
-  }
-
-  CodeStub* target_stub_;
-  Handle<Code> target_code_;
 };
 
 
@@ -1045,11 +1010,6 @@ class ToBooleanStub: public CodeStub {
     bool Record(Handle<Object> object);
     bool NeedsMap() const;
     bool CanBeUndetectable() const;
-
-    static const char* GetTypeAlias(Type type);
-    static const char* GetName(Types types, char* buf, size_t size);
-
-    static const size_t kNameSize = 18;
 
    private:
     EnumSet<Type, byte> set_;

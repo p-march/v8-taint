@@ -3814,6 +3814,45 @@ void LCodeGen::DoDeferredTaintResult(LTaintResult* instr) {
 }
 
 
+void LCodeGen::DoTaint(LTaint* instr) {
+  class DeferredTaint: public LDeferredCode {
+   public:
+    DeferredTaint(LCodeGen* codegen, LTaint* instr)
+        : LDeferredCode(codegen), instr_(instr) { }
+    virtual void Generate() { codegen()->DoDeferredTaint(instr_); }
+    virtual LInstruction* instr() { return instr_; }
+   private:
+    LTaint* instr_;
+  };
+
+  Register value = ToRegister(instr->InputAt(0));
+  Register temp1 = ToRegister(instr->TempAt(0));
+  Register temp2 = ToRegister(instr->TempAt(1));
+
+  ASSERT(value.is(ToRegister(instr->result())));
+  ASSERT(!temp1.is(value));
+  ASSERT(!temp2.is(value));
+  ASSERT(!temp2.is(temp1));
+
+  DeferredTaint* deferred = new DeferredTaint(this, instr);
+  __ Taint(value, temp1, temp2, temp1, deferred->entry(), false);
+  __ bind(deferred->exit());
+}
+
+
+void LCodeGen::DoDeferredTaint(LTaint* instr) {
+  Register result = ToRegister(instr->result());
+
+  {
+    PushSafepointRegistersScope scope(this);
+    CallRuntimeFromDeferred(Runtime::kTaint, 0, instr);
+    // Ensure that value in rax survives popping registers.
+    __ movq(kScratchRegister, rax);
+  }
+  __ movq(result, kScratchRegister);
+}
+
+
 void LCodeGen::DoCheckInstanceType(LCheckInstanceType* instr) {
   Register input = ToRegister(instr->InputAt(0));
 

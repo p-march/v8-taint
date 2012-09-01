@@ -13803,10 +13803,6 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_Taint) {
   ASSERT(args.length() == 1);
   Object* object = args[0];
 
-  if (object->IsTainted()) {
-    return object;
-  }
-
   return *Taint(Handle<Object>(object));
 }
 

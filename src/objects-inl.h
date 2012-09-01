@@ -694,6 +694,53 @@ bool Object::IsTainted() {
 }
 
 
+bool Object::IsTaintable() {
+  if (!IsHeapObject())
+    return true;
+
+  InstanceType type = HeapObject::cast(this)->map()->instance_type();
+  if (type <= LAST_TAINT_PRIMITIVE_TYPE) {
+    return true;
+  }
+
+  if (type >= FIRST_TAINT_JS_OBJECT_TYPE &&
+      type <= LAST_TAINT_JS_OBJECT_TYPE) {
+    ASSERT(IsJSObject());
+    JSObject* js_obj = JSObject::cast(this);
+    if (js_obj->tainted() == js_obj->map()->GetHeap()->null_value())
+      return false;
+    return true;
+  }
+  return false;
+}
+
+
+bool Object::IsTaintPrimitive() {
+  if (!IsHeapObject())
+    return true;
+
+  InstanceType type = HeapObject::cast(this)->map()->instance_type();
+  if (type <= LAST_TAINT_PRIMITIVE_TYPE) {
+    return true;
+  }
+
+  return false;
+}
+
+
+bool Object::IsTaintJSObject() {
+  if (!IsHeapObject())
+    return false;
+
+  InstanceType type = HeapObject::cast(this)->map()->instance_type();
+  if (type >= FIRST_TAINT_JS_OBJECT_TYPE &&
+      type <= LAST_TAINT_JS_OBJECT_TYPE) {
+    return true;
+  }
+  return false;
+}
+
+
 bool Object::IsMapCache() {
   return IsHashTable();
 }
@@ -2937,8 +2984,7 @@ void Code::set_major_key(int major) {
          kind() == UNARY_OP_IC ||
          kind() == BINARY_OP_IC ||
          kind() == COMPARE_IC ||
-         kind() == TO_BOOLEAN_IC ||
-         kind() == TAINT_WRAPPER_IC);
+         kind() == TO_BOOLEAN_IC);
   ASSERT(0 <= major && major < 256);
   WRITE_BYTE_FIELD(this, kStubMajorKeyOffset, major);
 }
@@ -3138,17 +3184,17 @@ void Code::set_to_boolean_state(byte value) {
 }
 
 
-Code* Code::wrapped_stub() {
+Code* Code::wrapped_code() {
   ASSERT(is_taint_wrapper_stub());
-  intptr_t value = READ_INTPTR_FIELD(this, kWrappedStubOffset);
+  intptr_t value = READ_INTPTR_FIELD(this, kWrappedCodeOffset);
   return reinterpret_cast<Code*>(value);
 }
 
 
-void Code::set_wrapped_stub(Code *value) {
+void Code::set_wrapped_code(Code *value) {
   ASSERT(is_taint_wrapper_stub());
   WRITE_INTPTR_FIELD(this,
-                     kWrappedStubOffset,
+                     kWrappedCodeOffset,
                      reinterpret_cast<uintptr_t>(value));
 }
 
@@ -4031,6 +4077,7 @@ ACCESSORS(Code, handler_table, FixedArray, kHandlerTableOffset)
 ACCESSORS(Code, deoptimization_data, FixedArray, kDeoptimizationDataOffset)
 ACCESSORS(Code, next_code_flushing_candidate,
           Object, kNextCodeFlushingCandidateOffset)
+ACCESSORS(Code, taint_wrapper, Object, kTaintWrapperOffset)
 
 
 byte* Code::instruction_start()  {
@@ -4040,6 +4087,11 @@ byte* Code::instruction_start()  {
 
 byte* Code::instruction_end()  {
   return instruction_start() + instruction_size();
+}
+
+
+bool Code::instruction_contains(byte* addr) {
+  return (instruction_start() <= addr) && (addr < instruction_end());
 }
 
 

@@ -131,7 +131,6 @@ class MacroAssembler: public Assembler {
   // Operations on roots in the root-array.
   void LoadRoot(Register destination, Heap::RootListIndex index);
   void StoreRoot(Register source, Heap::RootListIndex index);
-  void StoreRoot(Smi* source, Heap::RootListIndex index);
   // Load a root value where the index (or part of it) is variable.
   // The variable_offset register is added to the fixed_offset value
   // to get the index into the root-array.
@@ -139,7 +138,6 @@ class MacroAssembler: public Assembler {
                        Register variable_offset,
                        int fixed_offset);
   void CompareRoot(Register with, Heap::RootListIndex index);
-  void CompareRoot(Smi* with, Heap::RootListIndex index);
   void CompareRoot(const Operand& with, Heap::RootListIndex index);
   void PushRoot(Heap::RootListIndex index);
 
@@ -1246,6 +1244,26 @@ class MacroAssembler: public Assembler {
   void ClearTaintFlag();
 
   void JumpIfTaintFlagNotSet(Label* not_set);
+  
+  void TaintPrimitive(Register value,
+                      Register scratch1,
+                      Register scratch2,
+                      Label* slow);
+                                    
+  void TaintJSObject(Register value,
+                     Register scratch1,
+                     Register scratch2,
+                     Register scratch3,
+                     Label* slow,
+                     bool use_repmovs);
+
+  void Taint(Register value,
+             Register scratch1,
+             Register scratch2,
+             Register scratch3,
+             Label* slow,
+             bool use_repmovs);
+
 
   // ---------------------------------------------------------------------------
   // StatsCounter support
@@ -1304,6 +1322,7 @@ class MacroAssembler: public Assembler {
   bool allow_stub_calls_;
   bool has_frame_;
   bool root_array_available_;
+  bool taint_flag_set_;
 
   // Returns a register holding the smi value. The register MUST NOT be
   // modified. It may be the "smi 1 constant" register.
