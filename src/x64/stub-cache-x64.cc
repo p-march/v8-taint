@@ -1187,9 +1187,7 @@ Handle<Code> StubCompiler::GenerateTaintWrapper(Handle<Code> target,
     Comment taint_comment(masm(), "-- Taint result");
 
     if (!FLAG_taint_result) {
-#ifndef TAINT_FLAG
       __ pop(kScratchRegister); // pop taint flag from the stack
-#endif
       __ jmp(&done);
     }
 
@@ -2572,18 +2570,11 @@ Handle<Code> KeyedStoreStubCompiler::CompileTaintWrapper(Handle<Code> target) {
   //  -- rsp[0] : return address
   // -----------------------------------
 
-#ifdef DEBUG
-  Register key = rcx;
-  Label ok;
-  __ JumpIfNotTainted(key, &ok, Label::kNear);
-  __ Abort("KeyedStoreStubCompiler: key should not be tainted");
-  __ bind(&ok);
-#endif
-
   ASSERT(KeyedStoreIC::kUseTaintFalg == 0);
   Comment untaint_comment(masm(), "-- KeyedStoreStubTaintWrapper: Untaint value");
   __ Untaint(rdx);
-  
+  __ Untaint(rcx);
+
   return GenerateTaintWrapper(target, false, rbx, rdi);
 }
 
@@ -3165,18 +3156,11 @@ Handle<Code> KeyedLoadStubCompiler::CompileTaintWrapper(Handle<Code> target) {
   //  -- rsp[0] : return address
   // -----------------------------------
 
-#ifdef DEBUG
-  Register key = rax;
-  Label ok;
-  __ JumpIfNotTainted(key, &ok, Label::kNear);
-  __ Abort("KeyedLoadStubCompiler: key should not be tainted");
-  __ bind(&ok);
-#endif
-
   ASSERT(KeyedLoadIC::kUseTaintFalg == 1);
   Comment untaint_comment(masm(), "-- KeyedLoadStubTaintWrapper: Untaint value");
   __ ClearTaintFlag();
   __ UntaintWithFlag(rdx);
+  __ Untaint(rax);
 
   return GenerateTaintWrapper(target, true, rbx, rcx);
 }

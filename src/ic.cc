@@ -1936,7 +1936,7 @@ RUNTIME_FUNCTION(MaybeObject*, LoadIC_Miss) {
 // Used from ic-<arch>.cc
 RUNTIME_FUNCTION(MaybeObject*, KeyedLoadIC_Miss) {
   UNTAINT_ARGS(1);
-  ASSERT_IF_TAINTED_ARG(1);
+  UNTAINT(args[1]); // NOTE(petr): do not taint result if the key is tainted
   HandleScope scope(isolate);
   ASSERT(args.length() == 2);
   ASSERT(args.length() == KeyedLoadIC::kIC_MissArgs);
@@ -2048,7 +2048,7 @@ RUNTIME_FUNCTION(MaybeObject*, SharedStoreIC_ExtendStorage) {
 // Used from ic-<arch>.cc.
 RUNTIME_FUNCTION(MaybeObject*, KeyedStoreIC_Miss) {
   UNTAINT_ARGS(1);
-  ASSERT_IF_TAINTED_ARG(1);
+  UNTAINT(args[1]); // NOTE(petr): do not taint result if the key is tainted
   // NOTE(petr): do not untaint stored value (args[2])
   HandleScope scope(isolate);
   ASSERT(args.length() == 3);
