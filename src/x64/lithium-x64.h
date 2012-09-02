@@ -1931,13 +1931,12 @@ class LTaintResult: public LTemplateInstruction<1, 1, 2> {
 };
 
 
-class LTaint: public LTemplateInstruction<1, 1, 3> {
+class LTaint: public LTemplateInstruction<1, 1, 2> {
  public:
-  explicit LTaint(LOperand* value, LOperand* temp1, LOperand* temp2, LOperand* temp3) {
+  explicit LTaint(LOperand* value, LOperand* temp1, LOperand* temp2) {
     inputs_[0] = value;
     temps_[0] = temp1;
     temps_[1] = temp2;
-    temps_[2] = temp3;
   }
 
   DECLARE_CONCRETE_INSTRUCTION(Taint, "taint")

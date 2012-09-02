@@ -4442,9 +4442,7 @@ void MacroAssembler::TaintPrimitive(Register value,
 void MacroAssembler::TaintJSObject(Register value,
                                    Register scratch1,
                                    Register scratch2,
-                                   Register scratch3,
-                                   Label* slow,
-                                   bool use_repmovs) {
+                                   Label* slow) {
   Label done;
 #ifdef DEBUG
   {
@@ -4510,110 +4508,55 @@ void MacroAssembler::TaintJSObject(Register value,
 #endif
 
   ASSERT(!scratch1.is(scratch2));
-  ASSERT(!scratch3.is(scratch2));
 
   AllocateInNewSpace(scratch1,
                      scratch2,
-                     scratch3,
+                     scratch1,
                      no_reg,
                      slow,
                      NO_ALLOCATION_FLAGS);
 
-  if (use_repmovs) {
-    if (scratch1.is(scratch3)) {
-      movq(scratch1, FieldOperand(value, HeapObject::kMapOffset));
-      movzxbq(scratch1, FieldOperand(scratch1, Map::kInstanceSizeOffset));
-      push(scratch1);
-    } else {
-      movq(scratch3, scratch1); // backup size in bytes
-      shr(scratch1, Immediate(kPointerSizeLog2));
-    }
+  // get object size
+  movq(scratch2, FieldOperand(value, HeapObject::kMapOffset));
+  movzxbq(scratch2, FieldOperand(scratch2, Map::kInstanceSizeOffset));
 
-    and_(value, Immediate(~kHeapObjectTagMask));
+  // update object pointer to reference the end of the object
+  lea(value, Operand(value, scratch2, times_pointer_size, 0));
 
-    // value - original object
-    // scratch1 - size in qwords
-    // scratch2 - start of cloned object
-    // scratch3 - size in bytes if scratch3 != scratch1
+  // value - tagged end of original object
+  // scratch1 - untagged end of cloned objet
+  // scratch2 - size in qwords
 
-    if (!scratch2.is(rdi))
-      xchg(rdi, scratch2);
-    if (!value.is(rsi))
-      xchg(rsi, value);
-    if (!scratch1.is(rcx))
-      xchg(rcx, scratch1);
+  Label loop;
+  bind(&loop);
+  subq(value, Immediate(kPointerSize));
+  subq(scratch1, Immediate(kPointerSize));
+  movq(kScratchRegister, FieldOperand(value, 0));
+  movq(Operand(scratch1, 0), kScratchRegister);
+  decq(scratch2);
+  j(not_zero, &loop, Label::kNear);
 
-    repmovsq();
+  // tag the pointer to the cloed object
+  addq(scratch1, Immediate(kHeapObjectTag));
 
-    if (!scratch2.is(rdi))
-      xchg(rdi, scratch2);
-    if (!value.is(rsi))
-      xchg(rsi, value);
-    if (!scratch1.is(rcx))
-      xchg(rcx, scratch1);
+  // value - tagged original object
+  // scratch1 - tagged cloned object
 
-    if (scratch1.is(scratch3)) {
-      pop(scratch1);
-      shl(scratch1, Immediate(kPointerSizeLog2));
-      subq(value, scratch1);
-      subq(scratch2, scratch1);
-    } else {
-      subq(value, scratch3);
-      subq(scratch2, scratch3);
-    }
+  // set the taint wrapper in the cloned object
+  movq(FieldOperand(scratch1, JSObject::kTaintedOffset), value);
 
-    addq(value, Immediate(kHeapObjectTag));
-    addq(scratch2, Immediate(kHeapObjectTag));
+  LoadRoot(kScratchRegister, Heap::kTaintedMapRootIndex);
+  movq(FieldOperand(value, HeapObject::kMapOffset), kScratchRegister);
+  movq(FieldOperand(value, Tainted::kObjectOffset), scratch1);
 
-    movq(FieldOperand(scratch2, JSObject::kTaintedOffset), value);
+  // get object size
+  movq(scratch2, FieldOperand(scratch1, HeapObject::kMapOffset));
+  movzxbq(scratch2, FieldOperand(scratch2, Map::kInstanceSizeOffset));
 
-    LoadRoot(kScratchRegister, Heap::kTaintedMapRootIndex);
-    movq(FieldOperand(value, HeapObject::kMapOffset), kScratchRegister);
-    shl(scratch3, Immediate(kSmiShift));
-    movq(FieldOperand(value, Tainted::kSizeOffset), scratch3);
-    movq(FieldOperand(value, Tainted::kObjectOffset), scratch2);
-  } else {
-    if (scratch1.is(scratch3)) {
-      movq(scratch2, FieldOperand(value, HeapObject::kMapOffset));
-      movzxbq(scratch2, FieldOperand(scratch2, Map::kInstanceSizeOffset));
-      lea(value, Operand(value, scratch2, times_pointer_size, 0));
-    } else {
-      movq(scratch2, scratch1);
-      shl(scratch1, Immediate(kSmiShift));
-      addq(value, scratch2);
-      shr(scratch2, Immediate(kPointerSizeLog2));
-      // scratch1 - size in bytes
-    }
+  // convert the size to SMI
+  shl(scratch2, Immediate(kPointerSizeLog2 + kSmiShift));
 
-    // value - end of original object
-    // scratch2 - size in qwords
-    // scratch3 - end of cloned object
-
-    Label loop;
-    bind(&loop);
-    subq(value, Immediate(kPointerSize));
-    subq(scratch3, Immediate(kPointerSize));
-    movq(kScratchRegister, FieldOperand(value, 0));
-    movq(Operand(scratch3, 0), kScratchRegister);
-    decq(scratch2);
-    j(not_zero, &loop, Label::kNear);
-    addq(scratch3, Immediate(kHeapObjectTag));
-
-    // value - start of original object
-    // scratch3 - start of cloned object
-
-    movq(FieldOperand(scratch3, JSObject::kTaintedOffset), value);
-
-    LoadRoot(kScratchRegister, Heap::kTaintedMapRootIndex);
-    movq(FieldOperand(value, HeapObject::kMapOffset), kScratchRegister);
-    movq(FieldOperand(value, Tainted::kObjectOffset), scratch3);
-    if (scratch1.is(scratch3)) {
-      movq(scratch1, FieldOperand(scratch3, HeapObject::kMapOffset));
-      movzxbq(scratch1, FieldOperand(scratch1, Map::kInstanceSizeOffset));
-      shl(scratch1, Immediate(kPointerSizeLog2 + kSmiShift));
-    }
-    movq(FieldOperand(value, Tainted::kSizeOffset), scratch1);
-  }
+  movq(FieldOperand(value, Tainted::kSizeOffset), scratch2);
 
   bind(&done);
 }
@@ -4622,9 +4565,7 @@ void MacroAssembler::TaintJSObject(Register value,
 void MacroAssembler::Taint(Register value,
                            Register scratch1,
                            Register scratch2,
-                           Register scratch3,
-                           Label* slow,
-                           bool use_repmovs) {
+                           Label* slow) {
   Label done, primitive;
 
   JumpIfSmi(value, &primitive);
@@ -4638,7 +4579,7 @@ void MacroAssembler::Taint(Register value,
   CmpInstanceType(kScratchRegister, LAST_TAINT_JS_OBJECT_TYPE);
   j(above, &done);
 
-  TaintJSObject(value, scratch1, scratch2, scratch3, slow, use_repmovs);
+  TaintJSObject(value, scratch1, scratch2, slow);
   jmp(&done);
 
   bind(&primitive);

@@ -1253,16 +1253,12 @@ class MacroAssembler: public Assembler {
   void TaintJSObject(Register value,
                      Register scratch1,
                      Register scratch2,
-                     Register scratch3,
-                     Label* slow,
-                     bool use_repmovs);
+                     Label* slow);
 
   void Taint(Register value,
              Register scratch1,
              Register scratch2,
-             Register scratch3,
-             Label* slow,
-             bool use_repmovs);
+             Label* slow);
 
 
   // ---------------------------------------------------------------------------

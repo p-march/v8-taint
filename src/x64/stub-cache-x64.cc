@@ -1195,7 +1195,7 @@ Handle<Code> StubCompiler::GenerateTaintWrapper(Handle<Code> target,
 
     __ JumpIfTaintFlagNotSet(&done);
     Label slow;
-    __ Taint(result, scratch1, scratch2, scratch1, &slow, false);
+    __ Taint(result, scratch1, scratch2, &slow);
     __ jmp(&done);
     __ bind(&slow);
     {

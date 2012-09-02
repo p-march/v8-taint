@@ -2635,8 +2635,7 @@ void FullCodeGenerator::EmitTaint(CallRuntime* expr) {
 
   VisitForAccumulatorValue(args->at(0));
 
-  __ Taint(rax, rcx, rdi, rbx, &slow, false);
-//  __ Taint(rax, rbx, rcx, rbx, &slow, false);
+  __ Taint(rax, rbx, rcx, &slow);
   __ jmp(&done);
   __ bind(&slow);
   __ push(rax);

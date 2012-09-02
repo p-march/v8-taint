@@ -3773,7 +3773,7 @@ void LCodeGen::DoTaintResult(LTaintResult* instr) {
 
   DeferredTaintResult* deferred = new DeferredTaintResult(this, instr);
   if (instr->full_data_taint()) {
-    __ Taint(value, temp1, temp2, temp1, deferred->entry(), false);
+    __ Taint(value, temp1, temp2, deferred->entry());
   } else {
     Label ok;
     __ JumpIfSmi(value, &ok);
@@ -3820,7 +3820,6 @@ void LCodeGen::DoTaint(LTaint* instr) {
   Register value = ToRegister(instr->InputAt(0));
   Register temp1 = ToRegister(instr->TempAt(0));
   Register temp2 = ToRegister(instr->TempAt(1));
-  Register temp3 = ToRegister(instr->TempAt(2));
 
   ASSERT(value.is(ToRegister(instr->result())));
   ASSERT(!temp1.is(value));
@@ -3828,7 +3827,7 @@ void LCodeGen::DoTaint(LTaint* instr) {
   ASSERT(!temp2.is(temp1));
 
   DeferredTaint* deferred = new DeferredTaint(this, instr);
-  __ Taint(value, temp1, temp2, temp3, deferred->entry(), false);
+  __ Taint(value, temp1, temp2, deferred->entry());
   __ bind(deferred->exit());
 }
 
