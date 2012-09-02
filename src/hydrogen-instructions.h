@@ -4400,10 +4400,10 @@ class HUntaint: public HTemplateInstruction<1> {
 };
 
 
-// TODO(petr): substitute this instr with Taint
 class HTaintResult: public HTemplateInstruction<1> {
  public:
-  explicit HTaintResult(HValue* value) {
+  explicit HTaintResult(HValue* value, bool full_data_taint)
+      : full_data_taint_(full_data_taint) {
     SetOperandAt(0, value);
     set_representation(Representation::Tagged());
   }
@@ -4416,7 +4416,12 @@ class HTaintResult: public HTemplateInstruction<1> {
     return Representation::Tagged();
   }
 
+  bool full_data_taint() { return full_data_taint_; }
+
   DECLARE_CONCRETE_INSTRUCTION(TaintResult)
+
+ private:
+  bool full_data_taint_;
 };
 
 

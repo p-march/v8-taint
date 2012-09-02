@@ -5484,7 +5484,7 @@ void HGraphBuilder::VisitAdd(UnaryOperation* expr) {
     HInstruction* temp = AddInstruction(instr);
     if (instr->HasObservableSideEffects())
       AddSimulate(expr->id());
-    instr = new(zone()) HTaintResult(temp);
+    instr = new(zone()) HTaintResult(temp, false);
   }
 
   return ast_context()->ReturnInstruction(instr, expr->id());
@@ -5520,7 +5520,7 @@ void HGraphBuilder::VisitSub(UnaryOperation* expr) {
     HInstruction* temp = AddInstruction(instr);
     if (instr->HasObservableSideEffects())
       AddSimulate(expr->id());
-    instr = new(zone()) HTaintResult(temp);
+    instr = new(zone()) HTaintResult(temp, false);
   }
 
   return ast_context()->ReturnInstruction(instr, expr->id());
@@ -5549,7 +5549,7 @@ void HGraphBuilder::VisitBitNot(UnaryOperation* expr) {
     HInstruction* temp = AddInstruction(instr);
     if (instr->HasObservableSideEffects())
       AddSimulate(expr->id());
-    instr = new(zone()) HTaintResult(temp);
+    instr = new(zone()) HTaintResult(temp, false);
   }
 
   return ast_context()->ReturnInstruction(instr, expr->id());
@@ -5649,7 +5649,7 @@ HInstruction* HGraphBuilder::BuildIncrement(bool returns_original_input,
     HInstruction* temp = AddInstruction(instr);
     if (instr->HasObservableSideEffects())
       AddSimulate(expr->id());
-    instr = new(zone()) HTaintResult(temp);
+    instr = new(zone()) HTaintResult(temp, false);
   }
 
   AddInstruction(instr);
@@ -5910,7 +5910,7 @@ HInstruction* HGraphBuilder::BuildBinaryOperation(BinaryOperation* expr,
     HInstruction* temp = AddInstruction(instr);
     if (instr->HasObservableSideEffects())
       AddSimulate(expr->id());
-    instr = new(zone()) HTaintResult(temp);
+    instr = new(zone()) HTaintResult(temp, false);
   }
 
   return instr;

@@ -386,7 +386,6 @@ namespace internal {
   F(ProfilerPause, 0, 1) \
   /* Taint support */ \
   F(Taint, 1, 1) \
-  F(AllocateTainted, 0, 1) \
   F(DeepTaint, 1, 1) \
   F(DeepUntaint, 1, 1) \
   F(Print, 1, 1) \

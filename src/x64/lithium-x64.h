@@ -1910,14 +1910,24 @@ class LUntaint: public LTemplateInstruction<1, 1, 0> {
 };
 
 
-class LTaintResult: public LTemplateInstruction<1, 1, 1> {
+class LTaintResult: public LTemplateInstruction<1, 1, 2> {
  public:
-  explicit LTaintResult(LOperand* value, LOperand* temp) {
+  explicit LTaintResult(LOperand* value,
+                        LOperand* temp1,
+                        LOperand* temp2,
+                        bool full_data_taint)
+      : full_data_taint_(full_data_taint) {
     inputs_[0] = value;
-    temps_[0] = temp;
+    temps_[0] = temp1;
+    temps_[1] = temp2;
   }
 
   DECLARE_CONCRETE_INSTRUCTION(TaintResult, "taint-result")
+
+  bool full_data_taint() { return full_data_taint_; }
+
+ private:
+  bool full_data_taint_;
 };
 
 

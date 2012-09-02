@@ -3756,46 +3756,37 @@ void LCodeGen::DoTaintResult(LTaintResult* instr) {
   };
 
 
-  Register result = ToRegister(instr->result());
   Register value = ToRegister(instr->InputAt(0));
-  Register temp = ToRegister(instr->TempAt(0));
+  Register temp1 = ToRegister(instr->TempAt(0));
+  Register temp2 = ToRegister(instr->TempAt(1));
 
-  ASSERT(!result.is(value));
-  ASSERT(!temp.is(value));
-  ASSERT(!temp.is(result));
+  ASSERT(value.is(ToRegister(instr->result())));
+  ASSERT(!temp1.is(value));
+  ASSERT(!temp2.is(temp1));
 
   Label done;
-  __ movq(result, value);
   if (!FLAG_taint_result) {
-#ifndef TAINT_FLAG
     __ pop(kScratchRegister); // pop taint flag from the stack
-#endif
     __ jmp(&done);
   }
   __ JumpIfTaintFlagNotSet(&done);
-  __ JumpIfTainted(result, &done);
-
-#if DEBUG
-  Label primitive;
-  __ JumpIfSmi(value, &primitive);
-  __ CmpObjectType(value, FIRST_SPEC_OBJECT_TYPE, temp);
-  __ j(below, &primitive);
-  // NOTE(petr): no JSObjects should be returned by target stubs
-  __ Abort("Operand is a JSObject");
-  __ bind(&primitive);
-#endif
 
   DeferredTaintResult* deferred = new DeferredTaintResult(this, instr);
-  if (FLAG_inline_new) {
-    __ AllocateTainted(result,
-                       temp,
-                       FLAG_taint_result_slow ? deferred->entry() : &done);
+  if (instr->full_data_taint()) {
+    __ Taint(value, temp1, temp2, temp1, deferred->entry(), false);
   } else {
-    __ jmp(deferred->entry());
+    Label ok;
+    __ JumpIfSmi(value, &ok);
+    __ movq(kScratchRegister, FieldOperand(value, HeapObject::kMapOffset));
+    __ CmpInstanceType(kScratchRegister, TAINTED_TYPE);
+    __ j(equal, &done);
+    __ CmpInstanceType(kScratchRegister, LAST_TAINT_PRIMITIVE_TYPE);
+    __ j(below_equal, &ok);
+    __ Abort("DoTaintResult: primitive type expected");
+    __ bind(&ok);
+    __ TaintPrimitive(value, temp1, temp2, deferred->entry());
   }
   __ bind(deferred->exit());
-
-  __ movq(FieldOperand(result, Tainted::kObjectOffset), value);
 
   __ bind(&done);
 }
@@ -3806,7 +3797,8 @@ void LCodeGen::DoDeferredTaintResult(LTaintResult* instr) {
 
   {
     PushSafepointRegistersScope scope(this);
-    CallRuntimeFromDeferred(Runtime::kAllocateTainted, 0, instr);
+    __ push(result);
+    CallRuntimeFromDeferred(Runtime::kTaint, 1, instr);
     // Ensure that value in rax survives popping registers.
     __ movq(kScratchRegister, rax);
   }
@@ -3845,7 +3837,8 @@ void LCodeGen::DoDeferredTaint(LTaint* instr) {
 
   {
     PushSafepointRegistersScope scope(this);
-    CallRuntimeFromDeferred(Runtime::kTaint, 0, instr);
+    __ push(result);
+    CallRuntimeFromDeferred(Runtime::kTaint, 1, instr);
     // Ensure that value in rax survives popping registers.
     __ movq(kScratchRegister, rax);
   }

@@ -13807,14 +13807,6 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_Taint) {
 }
 
 
-RUNTIME_FUNCTION(MaybeObject*, Runtime_AllocateTainted) {
-  ASSERT_IF_TAINTED_ARGS();
-  NoHandleAllocation ha;
-  ASSERT(args.length() == 0);
-  return isolate->heap()->AllocateTainted();
-}
-
-
 MUST_USE_RESULT static MaybeObject* DeepTaint(Isolate* isolate,
                                               Object* object) {
   ASSERT(FLAG_taint_policy);
