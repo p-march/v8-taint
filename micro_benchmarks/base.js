@@ -56,7 +56,7 @@ function run_bench(bench) {
 function run_benchs(benchs) {
   for (var i in benchs) {
     run_bench(benchs[i]);
-    print((parseInt(i) + 1) + "/" + benchs.length + " " + benchs[i].name + " done");
+    // print((parseInt(i) + 1) + "/" + benchs.length + " " + benchs[i].name + " done");
   } 
 }
 
@@ -66,7 +66,7 @@ function report_benchs(benchs) {
 
   for (var i in benchs) {
     var result = (benchs[i].result / benchs[i].length / FIX).toFixed(2);
-    print(benchs[i].name + " " +
+    print("### " + benchs[i].name + " " +
           benchs[i].result + " iterations in " +
           benchs[i].length / FIX + " s " +
           benchs[i].stops + " stops " +
