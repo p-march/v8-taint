@@ -397,6 +397,7 @@ bool FullCodeGenerator::ShouldInlineSmiCase(Token::Value op) {
   // are too complicated and take up too much space.
   if (op == Token::DIV ||op == Token::MOD) return false;
   if (FLAG_always_inline_smi_code) return true;
+
   return loop_depth_ > 0;
 }
 

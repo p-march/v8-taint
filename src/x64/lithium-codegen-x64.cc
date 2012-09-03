@@ -3776,14 +3776,7 @@ void LCodeGen::DoTaintResult(LTaintResult* instr) {
     __ Taint(value, temp1, temp2, deferred->entry());
   } else {
     Label ok;
-    __ JumpIfSmi(value, &ok);
-    __ movq(kScratchRegister, FieldOperand(value, HeapObject::kMapOffset));
-    __ CmpInstanceType(kScratchRegister, TAINTED_TYPE);
-    __ j(equal, &done);
-    __ CmpInstanceType(kScratchRegister, LAST_TAINT_PRIMITIVE_TYPE);
-    __ j(below_equal, &ok);
-    __ Abort("DoTaintResult: primitive type expected");
-    __ bind(&ok);
+    __ JumpIfTainted(value, &done);
     __ TaintPrimitive(value, temp1, temp2, deferred->entry());
   }
   __ bind(deferred->exit());

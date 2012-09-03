@@ -41,14 +41,32 @@ namespace internal {
 void ToNumberStub::Generate(MacroAssembler* masm) {
   // The ToNumber stub takes one argument in eax.
   Label check_heap_number, call_builtin;
-  __ SmiTest(rax);
-  __ j(not_zero, &check_heap_number, Label::kNear);
-  __ Ret();
+  if (FLAG_taint_policy) {
+    Label taint_check, not_tainted;
+    __ JumpIfNotSmi(rax, &taint_check, Label::kNear);
+    __ Ret();
+    __ bind(&taint_check);
+    __ movq(rbx, rax);
+    __ CmpObjectType(rax, TAINTED_TYPE, kScratchRegister);
+    __ j(not_equal, &not_tainted, Label::kNear);
+    __ movq(rax, FieldOperand(rax, Tainted::kObjectOffset));
+    __ bind(&not_tainted);
+    __ JumpIfNotSmi(rax, &check_heap_number, Label::kNear);
+    __ movq(rax, rbx);
+    __ Ret();
+  } else {
+    __ SmiTest(rax);
+    __ j(not_zero, &check_heap_number, Label::kNear);
+    __ Ret();
+  }
 
   __ bind(&check_heap_number);
   __ CompareRoot(FieldOperand(rax, HeapObject::kMapOffset),
                  Heap::kHeapNumberMapRootIndex);
   __ j(not_equal, &call_builtin, Label::kNear);
+  if (FLAG_taint_policy) {
+    __ movq(rax, rbx);
+  }
   __ Ret();
 
   __ bind(&call_builtin);

@@ -523,7 +523,6 @@ DEFINE_bool(taint_policy, false, "Enable taint tracking")
 DEFINE_string(taint_policy_file, "taint_policy.js", "Specify the name of the taint policy file.")
 DEFINE_bool(use_taint_spec, true, "use specialization for tainted data.")
 // TODO(petr): get rid of two flags below, thery are for performance measurement
-DEFINE_bool(taint_result_slow, true, "taint results of stubs with slow path when needed.")
 DEFINE_bool(taint_result, true, "taint results of stubs.")
 
 //

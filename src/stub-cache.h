@@ -489,9 +489,10 @@ class StubCompiler BASE_EMBEDDED {
   Handle<Code> GetCodeWithFlags(Code::Flags flags, Handle<String> name);
   Handle<Code> GetTaintWrapperCode(Handle<Code> target);
   Handle<Code> GenerateTaintWrapper(Handle<Code> target,
-                                    bool taint_result,
                                     Register scratch1,
-                                    Register scratch2);
+                                    Register scratch2,
+                                    bool taint_result,
+                                    bool full_taint);
 
   MacroAssembler* masm() { return &masm_; }
   void set_failure(Failure* failure) { failure_ = failure; }

@@ -1173,9 +1173,10 @@ void StubCompiler::GenerateLoadInterceptor(Handle<JSObject> object,
 
 
 Handle<Code> StubCompiler::GenerateTaintWrapper(Handle<Code> target,
-                                                bool taint_result,
                                                 Register scratch1,
-                                                Register scratch2) {
+                                                Register scratch2,
+                                                bool taint_result,
+                                                bool full_taint) {
   ASSERT(!target.is_null());
   __ Call(target, RelocInfo::CODE_TARGET, kNoASTId);
   // This nop is to allow repatching of the target stub
@@ -1193,7 +1194,12 @@ Handle<Code> StubCompiler::GenerateTaintWrapper(Handle<Code> target,
 
     __ JumpIfTaintFlagNotSet(&done);
     Label slow;
-    __ Taint(result, scratch1, scratch2, &slow);
+    if (full_taint) {
+      __ Taint(result, scratch1, scratch2, &slow);
+    } else {
+      __ JumpIfTainted(result, &done);
+      __ TaintPrimitive(result, scratch1, scratch2, &slow);
+    }
     __ jmp(&done);
     __ bind(&slow);
     {
@@ -2463,7 +2469,7 @@ Handle<Code> StoreStubCompiler::CompileTaintWrapper(Handle<Code> target) {
   Comment untaint_comment(masm(), "-- StoreStubTaintWrapper: Untaint value");
   __ Untaint(rdx);
  
-  return GenerateTaintWrapper(target, false, rbx, rdi);
+  return GenerateTaintWrapper(target, rbx, rdi, false, true);
 }
 
 
@@ -2575,7 +2581,7 @@ Handle<Code> KeyedStoreStubCompiler::CompileTaintWrapper(Handle<Code> target) {
   __ Untaint(rdx);
   __ Untaint(rcx);
 
-  return GenerateTaintWrapper(target, false, rbx, rdi);
+  return GenerateTaintWrapper(target, rbx, rdi, false, true);
 }
 
 
@@ -2637,7 +2643,7 @@ Handle<Code> LoadStubCompiler::CompileTaintWrapper(Handle<Code> target) {
   __ ClearTaintFlag();
   __ UntaintWithFlag(rax);
   
-  return GenerateTaintWrapper(target, true, rbx, rdx);
+  return GenerateTaintWrapper(target, rbx, rdx, true, true);
 }
 
 
@@ -3162,7 +3168,7 @@ Handle<Code> KeyedLoadStubCompiler::CompileTaintWrapper(Handle<Code> target) {
   __ UntaintWithFlag(rdx);
   __ Untaint(rax);
 
-  return GenerateTaintWrapper(target, true, rbx, rcx);
+  return GenerateTaintWrapper(target, rbx, rcx, true, true);
 }
 
 
@@ -3176,7 +3182,7 @@ Handle<Code> UnaryOpStubCompiler::CompileTaintWrapper(Handle<Code> target) {
   __ ClearTaintFlag();
   __ UntaintWithFlag(rax);
 
-  return GenerateTaintWrapper(target, true, rbx, rcx);
+  return GenerateTaintWrapper(target, rbx, rcx, true, false);
 }
 
 
@@ -3192,7 +3198,7 @@ Handle<Code> BinaryOpStubCompiler::CompileTaintWrapper(Handle<Code> target) {
   __ UntaintWithFlag(rax);
   __ UntaintWithFlag(rdx);
 
-  return GenerateTaintWrapper(target, true, rbx, rcx);
+  return GenerateTaintWrapper(target, rbx, rcx, true, false);
 }
 
 
