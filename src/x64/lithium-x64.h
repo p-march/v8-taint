@@ -171,7 +171,6 @@ class LCodeGen;
   V(UnaryMathOperation)                         \
   V(UnknownOSRValue)                            \
   V(ValueOf)                                    \
-  V(UntaintWithFlag)                            \
   V(Untaint)                                    \
   V(Taint)                                      \
   V(TaintResult)
@@ -1890,23 +1889,19 @@ class LCheckNonSmi: public LTemplateInstruction<0, 1, 0> {
 };
 
 
-class LUntaintWithFlag: public LTemplateInstruction<1, 1, 0> {
- public:
-  explicit LUntaintWithFlag(LOperand* value) {
-    inputs_[0] = value;
-  }
-
-  DECLARE_CONCRETE_INSTRUCTION(UntaintWithFlag, "untaint-with-flag")
-};
-
-
 class LUntaint: public LTemplateInstruction<1, 1, 0> {
  public:
-  explicit LUntaint(LOperand* value) {
+  explicit LUntaint(LOperand* value, HUntaint::HUntaintFlags flags)
+      : flags_(flags) {
     inputs_[0] = value;
   }
 
+  HUntaint::HUntaintFlags untaint_flags() { return flags_; }
+
   DECLARE_CONCRETE_INSTRUCTION(Untaint, "untaint")
+
+ private:
+  HUntaint::HUntaintFlags flags_;
 };
 
 

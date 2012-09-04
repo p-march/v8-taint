@@ -71,9 +71,17 @@ TypeFeedbackOracle::TypeFeedbackOracle(Handle<Code> code,
 
 Handle<Object> TypeFeedbackOracle::GetInfo(unsigned ast_id) {
   int entry = dictionary_->FindEntry(ast_id);
-  return entry != NumberDictionary::kNotFound
-      ? Handle<Object>(dictionary_->ValueAt(entry))
-      : Handle<Object>::cast(isolate_->factory()->undefined_value());
+  Object* object = entry != NumberDictionary::kNotFound
+      ? dictionary_->ValueAt(entry)
+      : NULL;
+  if (object &&
+      object->IsCode() &&
+      Code::cast(object)->is_taint_wrapper_stub()) {
+    object = ProcessTaintWrapperIC(Code::cast(object));
+  }
+  return object ? 
+         Handle<Object>(object) :
+         Handle<Object>::cast(isolate_->factory()->undefined_value());
 }
 
 
@@ -82,6 +90,7 @@ bool TypeFeedbackOracle::LoadIsMonomorphicNormal(Property* expr) {
   if (map_or_code->IsMap()) return true;
   if (map_or_code->IsCode()) {
     Handle<Code> code = Handle<Code>::cast(map_or_code);
+    ASSERT(!code->is_taint_wrapper_stub());
     return code->is_keyed_load_stub() &&
         code->ic_state() == MONOMORPHIC &&
         Code::ExtractTypeFromFlags(code->flags()) == NORMAL &&
@@ -95,6 +104,7 @@ bool TypeFeedbackOracle::LoadIsMegamorphicWithTypeInfo(Property* expr) {
   Handle<Object> map_or_code = GetInfo(expr->id());
   if (map_or_code->IsCode()) {
     Handle<Code> code = Handle<Code>::cast(map_or_code);
+    ASSERT(!code->is_taint_wrapper_stub());
     Builtins* builtins = isolate_->builtins();
     return code->is_keyed_load_stub() &&
         *code != builtins->builtin(Builtins::kKeyedLoadIC_Generic) &&
@@ -109,6 +119,7 @@ bool TypeFeedbackOracle::StoreIsMonomorphicNormal(Expression* expr) {
   if (map_or_code->IsMap()) return true;
   if (map_or_code->IsCode()) {
     Handle<Code> code = Handle<Code>::cast(map_or_code);
+    ASSERT(!code->is_taint_wrapper_stub());
     return code->is_keyed_store_stub() &&
         code->ic_state() == MONOMORPHIC &&
         Code::ExtractTypeFromFlags(code->flags()) == NORMAL;
@@ -121,6 +132,7 @@ bool TypeFeedbackOracle::StoreIsMegamorphicWithTypeInfo(Expression* expr) {
   Handle<Object> map_or_code = GetInfo(expr->id());
   if (map_or_code->IsCode()) {
     Handle<Code> code = Handle<Code>::cast(map_or_code);
+    ASSERT(!code->is_taint_wrapper_stub());
     Builtins* builtins = isolate_->builtins();
     return code->is_keyed_store_stub() &&
         *code != builtins->builtin(Builtins::kKeyedStoreIC_Generic) &&
@@ -142,6 +154,7 @@ Handle<Map> TypeFeedbackOracle::LoadMonomorphicReceiverType(Property* expr) {
   Handle<Object> map_or_code = GetInfo(expr->id());
   if (map_or_code->IsCode()) {
     Handle<Code> code = Handle<Code>::cast(map_or_code);
+    ASSERT(!code->is_taint_wrapper_stub());
     Map* first_map = code->FindFirstMap();
     ASSERT(first_map != NULL);
     return Handle<Map>(first_map);
@@ -155,6 +168,7 @@ Handle<Map> TypeFeedbackOracle::StoreMonomorphicReceiverType(Expression* expr) {
   Handle<Object> map_or_code = GetInfo(expr->id());
   if (map_or_code->IsCode()) {
     Handle<Code> code = Handle<Code>::cast(map_or_code);
+    ASSERT(!code->is_taint_wrapper_stub());
     return Handle<Map>(code->FindFirstMap());
   }
   return Handle<Map>::cast(map_or_code);
@@ -244,6 +258,7 @@ TypeInfo TypeFeedbackOracle::CompareType(CompareOperation* expr) {
   TypeInfo unknown = TypeInfo::Unknown();
   if (!object->IsCode()) return unknown;
   Handle<Code> code = Handle<Code>::cast(object);
+  ASSERT(!code->is_taint_wrapper_stub());
   if (!code->is_compare_ic_stub()) return unknown;
 
   CompareIC::State state = static_cast<CompareIC::State>(code->compare_state());
@@ -272,6 +287,7 @@ bool TypeFeedbackOracle::IsSymbolCompare(CompareOperation* expr) {
   Handle<Object> object = GetInfo(expr->id());
   if (!object->IsCode()) return false;
   Handle<Code> code = Handle<Code>::cast(object);
+  ASSERT(!code->is_taint_wrapper_stub());
   if (!code->is_compare_ic_stub()) return false;
   CompareIC::State state = static_cast<CompareIC::State>(code->compare_state());
   return state == CompareIC::SYMBOLS;
@@ -284,10 +300,7 @@ TypeInfo TypeFeedbackOracle::UnaryType(UnaryOperation* expr) {
   if (!object->IsCode()) return unknown;
 
   Handle<Code> code = Handle<Code>::cast(object);
-  if (code->is_taint_wrapper_stub()) {
-    code = Handle<Code>(code->wrapped_code());
-  }
-
+  ASSERT(!code->is_taint_wrapper_stub());
   ASSERT(code->is_unary_op_stub());
   UnaryOpIC::TypeInfo type = static_cast<UnaryOpIC::TypeInfo>(
       code->unary_op_type());
@@ -308,10 +321,7 @@ TypeInfo TypeFeedbackOracle::BinaryType(BinaryOperation* expr) {
   if (!object->IsCode()) return unknown;
 
   Handle<Code> code = Handle<Code>::cast(object);
-  if (code->is_taint_wrapper_stub()) {
-    code = Handle<Code>(code->wrapped_code());
-  }
-
+  ASSERT(!code->is_taint_wrapper_stub());
   if (code->is_binary_op_stub()) {
     BinaryOpIC::TypeInfo type = static_cast<BinaryOpIC::TypeInfo>(
         code->binary_op_type());
@@ -360,6 +370,7 @@ TypeInfo TypeFeedbackOracle::SwitchType(CaseClause* clause) {
   TypeInfo unknown = TypeInfo::Unknown();
   if (!object->IsCode()) return unknown;
   Handle<Code> code = Handle<Code>::cast(object);
+  ASSERT(!code->is_taint_wrapper_stub());
   if (!code->is_compare_ic_stub()) return unknown;
 
   CompareIC::State state = static_cast<CompareIC::State>(code->compare_state());
@@ -392,10 +403,7 @@ TypeInfo TypeFeedbackOracle::IncrementType(CountOperation* expr) {
   if (!object->IsCode()) return unknown;
 
   Handle<Code> code = Handle<Code>::cast(object);
-  if (code->is_taint_wrapper_stub()) {
-    code = Handle<Code>(code->wrapped_code());
-  }
-
+  ASSERT(!code->is_taint_wrapper_stub());
   if (!code->is_binary_op_stub()) return unknown;
 
   BinaryOpIC::TypeInfo type = static_cast<BinaryOpIC::TypeInfo>(
@@ -421,10 +429,12 @@ TypeInfo TypeFeedbackOracle::IncrementType(CountOperation* expr) {
 
 
 bool TypeFeedbackOracle::HasTaintWrapper(Expression* expr) {
-  Handle<Object> object = GetInfo(expr->id());
-  if (!object->IsCode()) return false;
-  Handle<Code> code = Handle<Code>::cast(object);
-  return code->is_taint_wrapper_stub();
+  int entry = dictionary_->FindEntry(expr->id());
+  Object *object = entry != NumberDictionary::kNotFound ?
+                   dictionary_->ValueAt(entry) : NULL;
+  return object &&
+         object->IsCode() &&
+         Code::cast(object)->is_taint_wrapper_stub();
 }
 
 
@@ -464,6 +474,7 @@ void TypeFeedbackOracle::CollectKeyedReceiverTypes(unsigned ast_id,
   Handle<Object> object = GetInfo(ast_id);
   if (!object->IsCode()) return;
   Handle<Code> code = Handle<Code>::cast(object);
+  ASSERT(!code->is_taint_wrapper_stub());
   if (code->kind() == Code::KEYED_LOAD_IC ||
       code->kind() == Code::KEYED_STORE_IC) {
     AssertNoAllocation no_allocation;
@@ -527,6 +538,59 @@ void TypeFeedbackOracle::RelocateRelocInfos(ZoneList<RelocInfo>* infos,
     RelocInfo* info = &(*infos)[i];
     info->set_pc(new_start + (info->pc() - old_start));
   }
+}
+
+
+Object* TypeFeedbackOracle::ProcessTaintWrapperIC(Code *taint_wrapper) {
+  ASSERT(taint_wrapper->kind() == Code::TAINT_WRAPPER_IC);
+  Code* target = taint_wrapper->wrapped_code();
+  switch (target->kind()) {
+    case Code::LOAD_IC:
+    case Code::STORE_IC:
+    case Code::CALL_IC:
+    case Code::KEYED_CALL_IC:
+      if (target->ic_state() == MONOMORPHIC) {
+        if (target->kind() == Code::CALL_IC &&
+            target->check_type() != RECEIVER_MAP_CHECK) {
+          return Smi::FromInt(target->check_type());
+        } else {
+          Object* map = target->FindFirstMap();
+          return map == NULL ? static_cast<Object*>(target) : map;
+        }
+      } else if (target->ic_state() == MEGAMORPHIC) {
+        return target;
+      }
+      break;
+
+    case Code::KEYED_LOAD_IC:
+    case Code::KEYED_STORE_IC:
+      if (target->ic_state() == MONOMORPHIC ||
+          target->ic_state() == MEGAMORPHIC) {
+        return target;
+      }
+      break;
+
+    case Code::UNARY_OP_IC:
+    case Code::BINARY_OP_IC:
+    case Code::COMPARE_IC:
+    case Code::TO_BOOLEAN_IC:
+      return target;
+      break;
+
+    case Code::TAINT_WRAPPER_IC:
+      UNREACHABLE();
+      break;
+
+    case Code::STUB:
+      UNIMPLEMENTED();
+      break;
+
+    default:
+      break;
+  }
+
+  UNREACHABLE();
+  return NULL;
 }
 
 

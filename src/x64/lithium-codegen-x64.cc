@@ -3731,16 +3731,20 @@ void LCodeGen::DoCheckNonSmi(LCheckNonSmi* instr) {
 }
 
 
-void LCodeGen::DoUntaintWithFlag(LUntaintWithFlag* instr) {
-  LOperand* value = instr->InputAt(0);
-  __ ClearTaintFlag();
-  __ UntaintWithFlag(ToRegister(value));
-}
-
-
 void LCodeGen::DoUntaint(LUntaint* instr) {
   LOperand* value = instr->InputAt(0);
-  __ UntaintWithFlag(ToRegister(value));
+  if (instr->untaint_flags() == HUntaint::PUSH_AND_SET_TAINT_FLAG) {
+    __ ClearTaintFlag();
+  }
+
+  if (instr->untaint_flags() == HUntaint::PUSH_AND_SET_TAINT_FLAG ||
+      instr->untaint_flags() == HUntaint::SET_TAINT_FLAG) {
+    __ UntaintWithFlag(ToRegister(value));
+  }
+
+  if (instr->untaint_flags() == HUntaint::UNTAINT_ONLY) {
+    __ Untaint(ToRegister(value));
+  }
 }
 
 

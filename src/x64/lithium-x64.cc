@@ -1652,15 +1652,9 @@ LInstruction* LChunkBuilder::DoCheckNonSmi(HCheckNonSmi* instr) {
 }
 
 
-LInstruction* LChunkBuilder::DoUntaintWithFlag(HUntaintWithFlag* instr) {
-  LOperand* value = UseRegisterAtStart(instr->value());
-  return DefineSameAsFirst(new LUntaintWithFlag(value));
-}
-
-
 LInstruction* LChunkBuilder::DoUntaint(HUntaint* instr) {
   LOperand* value = UseRegisterAtStart(instr->value());
-  return DefineSameAsFirst(new LUntaint(value));
+  return DefineSameAsFirst(new LUntaint(value, instr->untaint_flags()));
 }
 
 

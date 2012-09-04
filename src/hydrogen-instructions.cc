@@ -793,11 +793,6 @@ void HTypeof::PrintDataTo(StringStream* stream) {
 }
 
 
-void HUntaintWithFlag::PrintDataTo(StringStream* stream) {
-  value()->PrintNameTo(stream);
-}
-
-
 void HUntaint::PrintDataTo(StringStream* stream) {
   value()->PrintNameTo(stream);
 }

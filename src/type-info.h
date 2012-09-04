@@ -293,6 +293,9 @@ class TypeFeedbackOracle BASE_EMBEDDED {
                           byte* new_start);
   void ProcessRelocInfos(ZoneList<RelocInfo>* infos);
 
+  // Returns information about wrapped code
+  Object* ProcessTaintWrapperIC(Code *taint_wrapper);
+
   // Returns an element from the backing store. Returns undefined if
   // there is no information.
   Handle<Object> GetInfo(unsigned ast_id);

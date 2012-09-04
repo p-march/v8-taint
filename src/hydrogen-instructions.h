@@ -179,7 +179,6 @@ class LChunkBuilder;
   V(UnknownOSRValue)                           \
   V(UseConst)                                  \
   V(ValueOf)                                   \
-  V(UntaintWithFlag)                           \
   V(Untaint)                                   \
   V(Taint)                                     \
   V(TaintResult)
@@ -4361,9 +4360,16 @@ class HTypeof: public HTemplateInstruction<2> {
 };
 
 
-class HUntaintWithFlag: public HTemplateInstruction<1> {
+class HUntaint: public HTemplateInstruction<1> {
  public:
-  explicit HUntaintWithFlag(HValue* value) {
+  enum HUntaintFlags {
+    UNTAINT_ONLY = 0,
+    PUSH_AND_SET_TAINT_FLAG,
+    SET_TAINT_FLAG
+  };
+
+  explicit HUntaint(HValue* value, HUntaintFlags flags = UNTAINT_ONLY)
+      : flags_(flags) {
     ASSERT(!value->IsConstant());
     SetOperandAt(0, value);
     set_representation(Representation::Tagged());
@@ -4377,26 +4383,12 @@ class HUntaintWithFlag: public HTemplateInstruction<1> {
     return Representation::Tagged();
   }
 
-  DECLARE_CONCRETE_INSTRUCTION(UntaintWithFlag)
-};
-
-
-class HUntaint: public HTemplateInstruction<1> {
- public:
-  explicit HUntaint(HValue* value) {
-    SetOperandAt(0, value);
-    set_representation(Representation::Tagged());
-  }
-
-  HValue* value() { return OperandAt(0); }
-
-  virtual void PrintDataTo(StringStream* stream);
-
-  virtual Representation RequiredInputRepresentation(int index) {
-    return Representation::Tagged();
-  }
+  HUntaintFlags untaint_flags() { return flags_; }
 
   DECLARE_CONCRETE_INSTRUCTION(Untaint)
+
+ private:
+  HUntaintFlags flags_;
 };
 
 

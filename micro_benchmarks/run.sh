@@ -13,16 +13,14 @@ PARAMS=(
 )
 PARSER="./parser.py"
 
-OUT=0
-
-for i in ${PARAMS[@]}
+for (( i=0; i<${#PARAMS[@]}; i++ ))
 do
-  let OUT++
-  echo $i > $OUT
-  echo >> $OUT
+  echo ${PARAMS[$i]} > $i
+  echo >> $i
   for j in {1..10}
   do
-    $V8 $BENCH $DEFAULT_PARAMS $i >> $OUT
+    $V8 $BENCH $DEFAULT_PARAMS ${PARAMS[$i]} >> $i
   done
-  $PARSER $OUT > "${OUT}_out"
+  echo ${PARAMS[$i]} > "${i}_out"
+  $PARSER $i >> "${i}_out"
 done

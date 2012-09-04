@@ -3719,6 +3719,7 @@ void HGraphBuilder::HandlePropertyAssignment(Assignment* expr) {
   ASSERT(prop != NULL);
   expr->RecordTypeFeedback(oracle());
   CHECK_ALIVE(VisitForValue(prop->obj()));
+  bool taint_enabled = oracle()->HasTaintWrapper(expr);
 
   HValue* value = NULL;
   HInstruction* instr = NULL;
@@ -3735,6 +3736,10 @@ void HGraphBuilder::HandlePropertyAssignment(Assignment* expr) {
 
     SmallMapList* types = expr->GetReceiverTypes();
     LookupResult lookup(isolate());
+
+    if (taint_enabled) {
+      object = AddInstruction(new(zone()) HUntaint(object));
+    }
 
     if (expr->IsMonomorphic()) {
       instr = BuildStoreNamed(object, value, expr);
@@ -3755,6 +3760,12 @@ void HGraphBuilder::HandlePropertyAssignment(Assignment* expr) {
     HValue* key = Pop();
     HValue* object = Pop();
     bool has_side_effects = false;
+
+    if (taint_enabled) {
+      object = AddInstruction(new(zone()) HUntaint(object));
+      key = AddInstruction(new(zone()) HUntaint(key));
+    }
+
     HandleKeyedElementAccess(object, key, value, expr, expr->AssignmentId(),
                              expr->position(),
                              true,  // is_store
@@ -4531,6 +4542,7 @@ void HGraphBuilder::VisitProperty(Property* expr) {
   ASSERT(current_block() != NULL);
   ASSERT(current_block()->HasPredecessor());
   expr->RecordTypeFeedback(oracle());
+  bool taint_enabled = oracle()->HasTaintWrapper(expr);
 
   if (TryArgumentsAccess(expr)) return;
 
@@ -4539,6 +4551,9 @@ void HGraphBuilder::VisitProperty(Property* expr) {
   HInstruction* instr = NULL;
   if (expr->AsProperty()->IsArrayLength()) {
     HValue* array = Pop();
+    if (taint_enabled) {
+      array = AddInstruction(new(zone()) HUntaint(array));
+    }
     AddInstruction(new(zone()) HCheckNonSmi(array));
     HInstruction* mapcheck =
         AddInstruction(HCheckInstanceType::NewIsJSArray(array));
@@ -4546,6 +4561,9 @@ void HGraphBuilder::VisitProperty(Property* expr) {
 
   } else if (expr->IsStringLength()) {
     HValue* string = Pop();
+    if (taint_enabled) {
+      string = AddInstruction(new(zone()) HUntaint(string));
+    }
     AddInstruction(new(zone()) HCheckNonSmi(string));
     AddInstruction(HCheckInstanceType::NewIsString(string));
     instr = new(zone()) HStringLength(string);
@@ -4556,10 +4574,21 @@ void HGraphBuilder::VisitProperty(Property* expr) {
     HValue* context = environment()->LookupContext();
     HStringCharCodeAt* char_code =
       BuildStringCharCodeAt(context, string, index);
+    if (taint_enabled) {
+      string = AddInstruction(new(zone()) HUntaint(string, HUntaint::PUSH_AND_SET_TAINT_FLAG));
+    }
     AddInstruction(char_code);
     instr = new(zone()) HStringCharFromCode(context, char_code);
-
+    if (taint_enabled) {
+      HInstruction* temp = AddInstruction(instr);
+      instr->set_position(expr->position());
+      if (instr->HasObservableSideEffects())
+        AddSimulate(expr->id());
+      instr = new(zone()) HTaintResult(temp, false);
+      return ast_context()->ReturnValue(AddInstruction(instr));
+    }
   } else if (expr->IsFunctionPrototype()) {
+    ASSERT(!taint_enabled);
     HValue* function = Pop();
     AddInstruction(new(zone()) HCheckNonSmi(function));
     instr = new(zone()) HLoadFunctionPrototype(function);
@@ -4569,6 +4598,9 @@ void HGraphBuilder::VisitProperty(Property* expr) {
     SmallMapList* types = expr->GetReceiverTypes();
 
     HValue* obj = Pop();
+    if (taint_enabled) {
+      obj = AddInstruction(new(zone()) HUntaint(obj, HUntaint::PUSH_AND_SET_TAINT_FLAG));
+    }
     if (expr->IsMonomorphic()) {
       instr = BuildLoadNamed(obj, expr, types->first(), name);
     } else if (types != NULL && types->length() > 1) {
@@ -4578,6 +4610,14 @@ void HGraphBuilder::VisitProperty(Property* expr) {
     } else {
       instr = BuildLoadNamedGeneric(obj, expr);
     }
+    instr->set_position(expr->position());
+    if (taint_enabled) {
+      HInstruction* temp = AddInstruction(instr);
+      if (instr->HasObservableSideEffects())
+        AddSimulate(expr->id());
+      instr = new(zone()) HTaintResult(temp, true);
+      return ast_context()->ReturnValue(AddInstruction(instr));
+    }
 
   } else {
     CHECK_ALIVE(VisitForValue(expr->key()));
@@ -4585,6 +4625,10 @@ void HGraphBuilder::VisitProperty(Property* expr) {
     HValue* key = Pop();
     HValue* obj = Pop();
 
+    if (taint_enabled) {
+      obj = AddInstruction(new(zone()) HUntaint(obj, HUntaint::PUSH_AND_SET_TAINT_FLAG));
+      key = AddInstruction(new(zone()) HUntaint(key, HUntaint::SET_TAINT_FLAG));
+    }
     bool has_side_effects = false;
     HValue* load = HandleKeyedElementAccess(
         obj, key, NULL, expr, expr->id(), expr->position(),
@@ -4598,6 +4642,18 @@ void HGraphBuilder::VisitProperty(Property* expr) {
         AddSimulate(expr->id());
         Drop(1);
       }
+    }
+    if (taint_enabled) {
+      HValue* temp = load;
+      if (temp->IsInstruction()) {
+        HInstruction*instr = static_cast<HInstruction*>(temp);
+        if (!instr->IsLinked()) {
+          temp = AddInstruction(instr);
+          if (instr->HasObservableSideEffects())
+            AddSimulate(expr->id());
+        }
+      }
+      load = AddInstruction(new(zone()) HTaintResult(temp, true));
     }
     return ast_context()->ReturnValue(load);
   }
@@ -5474,7 +5530,7 @@ void HGraphBuilder::VisitAdd(UnaryOperation* expr) {
   HValue* context = environment()->LookupContext();
 
   if (taint_enabled) {
-    value = AddInstruction(new(zone()) HUntaintWithFlag(value));
+    value = AddInstruction(new(zone()) HUntaint(value, HUntaint::PUSH_AND_SET_TAINT_FLAG));
   }
 
   HInstruction* instr =
@@ -5505,7 +5561,7 @@ void HGraphBuilder::VisitSub(UnaryOperation* expr) {
   }
 
   if (taint_enabled) {
-    value = AddInstruction(new(zone()) HUntaintWithFlag(value));
+    value = AddInstruction(new(zone()) HUntaint(value, HUntaint::PUSH_AND_SET_TAINT_FLAG));
   }
 
 
@@ -5539,7 +5595,7 @@ void HGraphBuilder::VisitBitNot(UnaryOperation* expr) {
   }
 
   if (taint_enabled) {
-    value = AddInstruction(new(zone()) HUntaintWithFlag(value));
+    value = AddInstruction(new(zone()) HUntaint(value, HUntaint::PUSH_AND_SET_TAINT_FLAG));
   }
 
 
@@ -5619,7 +5675,7 @@ HInstruction* HGraphBuilder::BuildIncrement(bool returns_original_input,
     // as the return value.
     value = Pop();
     if (taint_enabled) {
-      value = AddInstruction(new(zone()) HUntaintWithFlag(value));
+      value = AddInstruction(new(zone()) HUntaint(value, HUntaint::PUSH_AND_SET_TAINT_FLAG));
     }
     HInstruction* number_input = new(zone()) HForceRepresentation(value, rep);
     AddInstruction(number_input);
@@ -5628,7 +5684,7 @@ HInstruction* HGraphBuilder::BuildIncrement(bool returns_original_input,
   } else {
     value = Top();
     if (taint_enabled) {
-      value = AddInstruction(new(zone()) HUntaintWithFlag(value));
+      value = AddInstruction(new(zone()) HUntaint(value, HUntaint::PUSH_AND_SET_TAINT_FLAG));
     }
   }
 
@@ -5838,13 +5894,13 @@ HInstruction* HGraphBuilder::BuildBinaryOperation(BinaryOperation* expr,
 
   if (taint_enabled) {
     if (!left->IsConstant()) {
-      left = AddInstruction(new(zone()) HUntaintWithFlag(left));
+      left = AddInstruction(new(zone()) HUntaint(left, HUntaint::PUSH_AND_SET_TAINT_FLAG));
       if (!right->IsConstant()) {
-        right = AddInstruction(new(zone()) HUntaint(right));
+        right = AddInstruction(new(zone()) HUntaint(right, HUntaint::SET_TAINT_FLAG));
       }
     } else {
       if (!right->IsConstant()) {
-        right = AddInstruction(new(zone()) HUntaintWithFlag(right));
+        right = AddInstruction(new(zone()) HUntaint(right, HUntaint::PUSH_AND_SET_TAINT_FLAG));
       }
     }    
   }
