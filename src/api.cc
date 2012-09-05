@@ -4345,15 +4345,15 @@ bool Context::SetTaintPolicy(Handle<Context> taint_context,
 
   if (source.IsEmpty()) {
     bool exists;
-    source =
-      v8::String::New(i::ReadFile(i::FLAG_taint_policy_file, &exists).start());
-    if (!ApiCheck(exists,
+    i::Vector<const char> input =
+        i::ReadFile(i::FLAG_taint_policy_file, &exists);
+    if (!ApiCheck(exists && input.start(),
                   "v8::Context::SetTaintPolicy()",
                   "cannot open policy file specified "
                   "with the --taint_policy_file flag")) {
       return false;
     }
-
+    source = v8::String::New(input.start());
     file = v8::String::New(i::FLAG_taint_policy_file);
   }
 
