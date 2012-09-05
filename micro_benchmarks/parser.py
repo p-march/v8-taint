@@ -73,23 +73,10 @@ def main():
 
   for i in order:
     print i + "\t" + \
-          "%.2f" % log[i]['perf'][0] + " " + \
-          "%.2f" % log[i]['perf'][1] + " " + \
-          "%.2f" % log[i]['perf'][2] + " " + \
-          "%.2f" % (log[i]['perf'][2] / log[i]['perf'][1])
-#    print i + "\t" + \
-#          "%.2f" % log[i]['iter'][0] + "_" + \
-#          "%.2f" % log[i]['iter'][1] + "_" + \
-#          "%.2f" % log[i]['iter'][2] + "\t" + \
-#          "%.2f" % log[i]['length'][0] + "_" + \
-#          "%.2f" % log[i]['length'][1] + "_" + \
-#          "%.2f" % log[i]['length'][2] + "\t" + \
-#          "%.2f" % log[i]['stops'][0] + "_" + \
-#          "%.2f" % log[i]['stops'][1] + "_" + \
-#          "%.2f" % log[i]['stops'][2] + "\t" + \
-#          "%.2f" % log[i]['perf'][0] + "_" + \
-#          "%.2f" % log[i]['perf'][1] + "_" + \
-#          "%.2f" % log[i]['perf'][2]          
+          "%.8f" % log[i]['perf'][0] + " " + \
+          "%.8f" % log[i]['perf'][1] + " " + \
+          "%.8f" % log[i]['perf'][2] + " " + \
+          "%.8f" % (log[i]['perf'][2] / log[i]['perf'][1])
 
 main()
   

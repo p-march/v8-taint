@@ -65,7 +65,7 @@ function report_benchs(benchs) {
   print("\n");
 
   for (var i in benchs) {
-    var result = (benchs[i].result / benchs[i].length / FIX).toFixed(2);
+    var result = (benchs[i].result / benchs[i].length / FIX).toFixed(8);
     print("### " + benchs[i].name + " " +
           benchs[i].result + " iterations in " +
           benchs[i].length / FIX + " s " +
@@ -76,11 +76,11 @@ function report_benchs(benchs) {
   print("\n");
 
   for (var i = 0; i < benchs.length; i++) {
-    var n_result = (benchs[i].result / benchs[i].length / FIX).toFixed(2);
+    var n_result = (benchs[i].result / benchs[i].length / FIX).toFixed(8);
     if (benchs[i+1] &&
         benchs[i].name.indexOf(benchs[i+1].name.replace(" (T)", "")) == 0) {
-      var t_result = (benchs[i+1].result / benchs[i+1].length / FIX).toFixed(2);
-      var slowdown = (n_result / t_result).toFixed(2);
+      var t_result = (benchs[i+1].result / benchs[i+1].length / FIX).toFixed(8);
+      var slowdown = (n_result / t_result).toFixed(8);
       print(benchs[i].name.replace(" (N)", "") + "\t" +
             n_result + "\t" +
             t_result + "\t" +
