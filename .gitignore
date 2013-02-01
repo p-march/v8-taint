@@ -34,3 +34,8 @@ shell_g
 /xcodebuild/
 TAGS
 *.Makefile
+*.vpj
+*.vpw
+*.vpwhistu
+*.vtg
+

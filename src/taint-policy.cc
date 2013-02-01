@@ -57,9 +57,8 @@ MaybeObject* TaintPolicy::BeforeTaintPolicyCheck(Isolate* isolate,
     }
   
     Handle<Object> holder = args[2];
-    Handle<String> name =
-      isolate->factory()->LookupAsciiSymbol("TaintPolicyBeforeFunctions");
-  
+    Handle<String> name = isolate->factory()->taint_before_functions();
+
     // check if there are taint policy functions installed on the holder
     MaybeObject* maybe_obj = holder->IsTainted() ?
           Handle<Tainted>::cast(holder)->tainted_object()->GetProperty(*name) :
@@ -76,7 +75,7 @@ MaybeObject* TaintPolicy::BeforeTaintPolicyCheck(Isolate* isolate,
     if (value == isolate->heap()->undefined_value()) {
       // call into policy engine to get the policy functions
       // set for the holder
-      name = isolate->factory()->LookupAsciiSymbol("TaintPolicyEngine");
+      name = isolate->factory()->taint_engine();
       maybe_obj = taint_global->GetProperty(*name);
       if (maybe_obj->IsFailure()) return maybe_obj;
       value = maybe_obj->ToObjectUnchecked();
@@ -101,7 +100,7 @@ MaybeObject* TaintPolicy::BeforeTaintPolicyCheck(Isolate* isolate,
       break;
     }
 
-    name = isolate->factory()->LookupAsciiSymbol("RunTaintPolicyBeforeFunctions");
+    name = isolate->factory()->taint_run_before_functions();
     maybe_obj = taint_global->GetProperty(*name);
     if (maybe_obj->IsFailure() ||
         !maybe_obj->ToObjectUnchecked()->IsJSFunction()) {
@@ -154,8 +153,7 @@ MaybeObject* TaintPolicy::AfterTaintPolicyCheck(Isolate* isolate,
     }
   
     Handle<Object> holder = args[2];
-    Handle<String> name =
-      isolate->factory()->LookupAsciiSymbol("TaintPolicyAfterFunctions");
+    Handle<String> name = isolate->factory()->taint_after_functions();
   
     // check if there are taint policy functions installed on the holder
     MaybeObject* maybe_obj = holder->IsTainted() ?
@@ -169,7 +167,7 @@ MaybeObject* TaintPolicy::AfterTaintPolicyCheck(Isolate* isolate,
       break;
     }
 
-    name = isolate->factory()->LookupAsciiSymbol("RunTaintPolicyAfterFunctions");
+    name = isolate->factory()->taint_run_after_functions();
     maybe_obj = taint_global->GetProperty(*name);
     if (maybe_obj->IsFailure() ||
         !maybe_obj->ToObjectUnchecked()->IsJSFunction()) {

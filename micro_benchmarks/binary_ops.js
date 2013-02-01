@@ -11,6 +11,8 @@ var config_benchs = [
   [ "Add-D (T)",   function(a, b) { return a + b; },   [ %Taint(1.1),   %Taint(1.1) ] ],
   [ "Sub-D (N)",   function(a, b) { return a - b; },   [ 2.1,           2.2 ] ],
   [ "Sub-D (T)",   function(a, b) { return a - b; },   [ %Taint(2.1),   %Taint(2.2) ] ],
+  [ "Mul-D (N)",   function(a, b) { return a * b; },   [ 2.2,           2.3 ] ],
+  [ "Mul-D (T)",   function(a, b) { return a * b; },   [ %Taint(2.2),   %Taint(2.3) ] ],
   [ "Div-D (N)",   function(a, b) { return a / b; },   [ 3.5,           1.1 ] ],
   [ "Div-D (T)",   function(a, b) { return a / b; },   [ %Taint(3.5),   %Taint(1.1) ] ],
   [ "Add-S (N)",   function(a, b) { return a + b; },   [ "1",           "2" ] ],

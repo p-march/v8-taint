@@ -265,6 +265,31 @@ class UntaintedParamScope {
   Object** location_value;
 };
 
+
+class UntaintedReceiverScope {
+ public:
+  inline UntaintedReceiverScope(Handle<JSReceiver>& receiver) {
+    ptr_receiver = NULL;
+
+    if (receiver->IsTainted()) {
+      ptr_receiver = *receiver;
+      location_receiver = receiver.location();
+      *receiver.location() =
+          JSReceiver::cast(Handle<Tainted>::cast(receiver)->tainted_object());
+    }
+  }
+
+  inline ~UntaintedReceiverScope() {
+    if (ptr_receiver) {
+      *location_receiver = ptr_receiver;
+    }
+  }
+
+ private:
+  JSReceiver** location_receiver;
+  JSReceiver* ptr_receiver;
+};
+
 } }  // namespace v8::internal
 
 #endif  // V8_TAINT_POLICY_H_

@@ -249,7 +249,12 @@ inline Heap* _inline_get_heap_();
   V(dot_symbol, ".")                                                     \
   V(anonymous_function_symbol, "(anonymous function)")                   \
   V(infinity_symbol, "Infinity")                                         \
-  V(minus_infinity_symbol, "-Infinity")
+  V(minus_infinity_symbol, "-Infinity")                                  \
+  V(taint_engine, "TaintPolicyEngine")                                   \
+  V(taint_before_functions, "TaintPolicyBeforeFunctions")                \
+  V(taint_after_functions, "TaintPolicyAfterFunctions")                  \
+  V(taint_run_before_functions, "RunTaintPolicyBeforeFunctions")         \
+  V(taint_run_after_functions, "RunTaintPolicyAfterFunctions")
 
 // Forward declarations.
 class GCTracer;

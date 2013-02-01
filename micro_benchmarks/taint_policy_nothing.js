@@ -57,32 +57,32 @@ function NullTaintPolicyFunctions(holder) {
     _SetFunctionsValue(taint_after_func_name, holder, null);
 }
 
-function _RunTaintPolicyFunctions(func, ret, operation, holder, name) {
-  function add_results(res1, res2) {
-    if (res1 == undefined)
-      res1 = default_action;
-    if (res2 == undefined)
-      res2 = default_action;
-    if (res1 == throw_action || res2 == throw_action)
-      return throw_action;
-    if (res1 == ignore_action || res2 == ignore_action)
-      return ignore_action;
-    if (res1 & taint_result_action ||
-        res1 & taint_holder_action ||
-        res2 & taint_result_action ||
-        res2 & taint_holder_action) {
-      res1 &= (taint_result_action | taint_holder_action);
-      res2 &= (taint_result_action | taint_holder_action);
-      return res1 | res2;
-    }
-    if (res1 == none_action || res2 == none_action)
-      return none_action;
-    if (res1 != default_action && res2 != default_action)
-      throw "unknown action value '" + res1 + "' or '" + res2 + "'";
-    return default_action;
+function AddResults(res1, res2) {
+  if (res1 == undefined)
+    res1 = default_action;
+  if (res2 == undefined)
+    res2 = default_action;
+  if (res1 == throw_action || res2 == throw_action)
+    return throw_action;
+  if (res1 == ignore_action || res2 == ignore_action)
+    return ignore_action;
+  if (res1 & taint_result_action ||
+      res1 & taint_holder_action ||
+      res2 & taint_result_action ||
+      res2 & taint_holder_action) {
+    res1 &= (taint_result_action | taint_holder_action);
+    res2 &= (taint_result_action | taint_holder_action);
+    return res1 | res2;
   }
+  if (res1 == none_action || res2 == none_action)
+    return none_action;
+  if (res1 != default_action && res2 != default_action)
+    throw "unknown action value '" + res1 + "' or '" + res2 + "'";
+  return default_action;
+}
 
-  var functions = holder[func];
+function RunTaintPolicyBeforeFunctions(ret, operation, holder, name) {
+  var functions = holder[taint_before_func_name];
   if (functions == undefined)
     return undefined;
 
@@ -91,23 +91,30 @@ function _RunTaintPolicyFunctions(func, ret, operation, holder, name) {
 
   var result = default_action;
 
-  Array.prototype.shift.call(arguments);
   for (var i = 0; i < functions.length; i++) {
     var tmp_result = functions[i].apply(this, arguments);
-    result = add_results(result, tmp_result);
+    result = AddResults(result, tmp_result);
   }
 
   return result;
 }
 
-function RunTaintPolicyBeforeFunctions(ret, operation, holder, name) {
-  Array.prototype.unshift.call(arguments, taint_before_func_name);
-  return _RunTaintPolicyFunctions.apply(this, arguments);
-}
-
 function RunTaintPolicyAfterFunctions(ret, operation, holder, name) {
-  Array.prototype.unshift.call(arguments, taint_after_func_name);
-  return _RunTaintPolicyFunctions.apply(this, arguments);
+  var functions = holder[taint_after_func_name];
+  if (functions == undefined)
+    return undefined;
+
+  if (functions == null)
+    return default_action;
+
+  var result = default_action;
+
+  for (var i = 0; i < functions.length; i++) {
+    var tmp_result = functions[i].apply(this, arguments);
+    result = AddResults(result, tmp_result);
+  }
+
+  return result;
 }
 
 function RunTaintPolicyFunctions(ret, operation, holder, name) {
@@ -121,5 +128,6 @@ function do_nothing(ret, operation, holder, name) {
 
 function TaintPolicyEngine(ret, operation, holder, name) {
   AddFunction(holder, do_nothing);
+  NullTaintPolicyFunctions(holder);
   return RunTaintPolicyFunctions.apply(this, arguments);
 }

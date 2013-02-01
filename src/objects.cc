@@ -10657,6 +10657,7 @@ MaybeObject* JSObject::GetPropertyWithInterceptorTaintCheck(
   {
     TaintDisabledContextScope ctx_scope(isolate->context());
     UntaintedParamScope param_scope(self, name_handler);
+    UntaintedReceiverScope receiver_scope(receiver_handler);
     result = self->GetPropertyWithInterceptor(*receiver_handler,
                                               *name_handler,
                                               attributes);

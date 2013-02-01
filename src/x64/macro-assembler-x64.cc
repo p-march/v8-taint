@@ -4536,7 +4536,7 @@ void MacroAssembler::TaintJSObject(Register value,
   decq(scratch2);
   j(not_zero, &loop, Label::kNear);
 
-  // tag the pointer to the cloed object
+  // tag the pointer to the cloned object
   addq(scratch1, Immediate(kHeapObjectTag));
 
   // value - tagged original object

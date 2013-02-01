@@ -220,7 +220,7 @@ class GlobalHandles::Node {
     state_ = NEAR_DEATH;
     set_parameter(NULL);
 
-    v8::Persistent<v8::Object> object = ToApi<v8::Object>(handle());
+    v8::Persistent<v8::Object> object = ToApiLeaveTaint<v8::Object>(handle());
     {
       // Check that we are not passing a finalized external string to
       // the callback.

@@ -1954,7 +1954,7 @@ RUNTIME_FUNCTION(MaybeObject*, KeyedLoadIC_Miss) {
 
 RUNTIME_FUNCTION(MaybeObject*, KeyedLoadIC_MissForceGeneric) {
   UNTAINT_ARGS(1);
-  ASSERT_IF_TAINTED_ARG(1);
+  UNTAINT(args[1]); // NOTE(petr): do not set taint flag if the index is tainted
   HandleScope scope(isolate);
   ASSERT(args.length() == 2);
   ASSERT(args.length() == KeyedLoadIC::kIC_MissArgs);
@@ -2087,7 +2087,8 @@ RUNTIME_FUNCTION(MaybeObject*, KeyedStoreIC_Slow) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, KeyedStoreIC_MissForceGeneric) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT(args[0]);
+  UNTAINT(args[1]);
   HandleScope scope(isolate);
   ASSERT(args.length() == 3);
   KeyedStoreIC ic(isolate, IC::NO_TAINT_WRAPPER);
