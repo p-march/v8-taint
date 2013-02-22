@@ -755,7 +755,7 @@ void MacroAssembler::PushTryHandler(CodeLocation try_location,
 
   // Push the state and the code object.
   push(Immediate(state));
-  Push(CodeObject());
+  push(CodeObject());
 
   // Link the current handler as the next handler.
   ExternalReference handler_address(Isolate::kHandlerAddress, isolate());
@@ -2022,7 +2022,7 @@ void MacroAssembler::InvokeFunction(Handle<JSFunction> function,
   ASSERT(flag == JUMP_FUNCTION || has_frame());
 
   // Get the function and setup the context.
-  LoadHeapObject(edi, function);
+  mov(edi, Immediate(function));
   mov(esi, FieldOperand(edi, JSFunction::kContextOffset));
 
   ParameterCount expected(function->shared()->formal_parameter_count());
@@ -2151,29 +2151,6 @@ int MacroAssembler::SafepointRegisterStackIndex(int reg_code) {
 }
 
 
-void MacroAssembler::LoadHeapObject(Register result,
-                                    Handle<HeapObject> object) {
-  if (isolate()->heap()->InNewSpace(*object)) {
-    Handle<JSGlobalPropertyCell> cell =
-        isolate()->factory()->NewJSGlobalPropertyCell(object);
-    mov(result, Operand::Cell(cell));
-  } else {
-    mov(result, object);
-  }
-}
-
-
-void MacroAssembler::PushHeapObject(Handle<HeapObject> object) {
-  if (isolate()->heap()->InNewSpace(*object)) {
-    Handle<JSGlobalPropertyCell> cell =
-        isolate()->factory()->NewJSGlobalPropertyCell(object);
-    push(Operand::Cell(cell));
-  } else {
-    Push(object);
-  }
-}
-
-
 void MacroAssembler::Ret() {
   ret(0);
 }
@@ -2241,6 +2218,11 @@ void MacroAssembler::Untaint(Register src, Register scratch) {
   j(NegateCondition(tainted), &not_tainted, Label::kNear);
   mov(src, FieldOperand(src, Tainted::kObjectOffset));
   bind(&not_tainted);
+}
+
+
+void MacroAssembler::Move(Register dst, Handle<Object> value) {
+  mov(dst, value);
 }
 
 

@@ -253,7 +253,6 @@ function FormatMessage(message) {
       "unprotected_const",            ["Illegal const declaration in unprotected statement context."],
       "cant_prevent_ext_external_array_elements", ["Cannot prevent extension of an object with external array elements"],
       "redef_external_array_element", ["Cannot redefine a property of an object with external array elements"],
-      "harmony_const_assign",         ["Assignment to constant variable."],
       "taint_policy",                 ["Taint policy check failed (operation: '", "%1", "', object: '", "%2", "', property: '", "%3", "', args: '", "%4+", "')"],
     ];
     var messages = { __proto__ : null };

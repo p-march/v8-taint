@@ -2939,276 +2939,157 @@ void FloatingPointHelper::CheckFloatOperandsAreInt32(MacroAssembler* masm,
 
 
 void MathPowStub::Generate(MacroAssembler* masm) {
+  // Registers are used as follows:
+  // edx = base
+  // eax = exponent
+  // ecx = temporary, result
+
   CpuFeatures::Scope use_sse2(SSE2);
-  Factory* factory = masm->isolate()->factory();
-  Label double_int_runtime, generic_runtime, done;
-  Label base_is_smi, unpack_exponent, exponent_not_smi, int_exponent;
+  Label allocate_return, call_runtime;
+
+  // Load input parameters.
+  __ mov(edx, Operand(esp, 2 * kPointerSize));
+  __ mov(eax, Operand(esp, 1 * kPointerSize));
+
   // Save 1 in xmm3 - we need this several times later on.
   __ mov(ecx, Immediate(1));
   __ cvtsi2sd(xmm3, ecx);
 
-  if (exponent_type_ == ON_STACK) {
-    // The exponent (and base) are supplied as arguments on the stack.
-    // This can only happen if the stub is called from non-optimized code.
-    // Load input parameters from stack
-    __ mov(edx, Operand(esp, 2 * kPointerSize));
-    __ mov(eax, Operand(esp, 1 * kPointerSize));
-    // edx: base (smi or heap number)
-    // eax: exponent (smi or heap number)
-    __ JumpIfSmi(edx, &base_is_smi, Label::kNear);
-    __ cmp(FieldOperand(edx, HeapObject::kMapOffset),
-           factory->heap_number_map());
-    __ j(not_equal, &generic_runtime);
+  Label exponent_nonsmi;
+  Label base_nonsmi;
+  // If the exponent is a heap number go to that specific case.
+  __ JumpIfNotSmi(eax, &exponent_nonsmi);
+  __ JumpIfNotSmi(edx, &base_nonsmi);
 
-    __ movdbl(xmm1, FieldOperand(edx, HeapNumber::kValueOffset));
-    __ jmp(&unpack_exponent, Label::kNear);
+  // Optimized version when both exponent and base are smis.
+  Label powi;
+  __ SmiUntag(edx);
+  __ cvtsi2sd(xmm0, edx);
+  __ jmp(&powi);
+  // exponent is smi and base is a heapnumber.
+  __ bind(&base_nonsmi);
+  Factory* factory = masm->isolate()->factory();
+  __ cmp(FieldOperand(edx, HeapObject::kMapOffset),
+         factory->heap_number_map());
+  __ j(not_equal, &call_runtime);
 
-    __ bind(&base_is_smi);
-    __ SmiUntag(edx);
-    __ cvtsi2sd(xmm1, edx);
-    __ bind(&unpack_exponent);
+  __ movdbl(xmm0, FieldOperand(edx, HeapNumber::kValueOffset));
 
-    __ JumpIfNotSmi(eax, &exponent_not_smi, Label::kNear);
-    __ SmiUntag(eax);
-    __ jmp(&int_exponent);
+  // Optimized version of pow if exponent is a smi.
+  // xmm0 contains the base.
+  __ bind(&powi);
+  __ SmiUntag(eax);
 
-    __ bind(&exponent_not_smi);
-    __ cmp(FieldOperand(eax, HeapObject::kMapOffset),
-           factory->heap_number_map());
-    __ j(not_equal, &generic_runtime);
-    __ movdbl(xmm2, FieldOperand(eax, HeapNumber::kValueOffset));
-  } else if (exponent_type_ == TAGGED) {
-    // xmm1: base as double
-    // eax: exponent (smi or heap number)
-    __ JumpIfNotSmi(eax, &exponent_not_smi, Label::kNear);
-    __ SmiUntag(eax);
-    __ jmp(&int_exponent);
-
-    __ bind(&exponent_not_smi);
-    __ movdbl(xmm2, FieldOperand(eax, HeapNumber::kValueOffset));
-  }
-
-  if (exponent_type_ != INTEGER) {
-    Label fast_power;
-    // xmm1: base as double that is not +/- Infinity or NaN
-    // xmm2: exponent as double
-    // Detect integer exponents stored as double.
-    __ cvttsd2si(eax, Operand(xmm2));
-    // Skip to runtime if possibly NaN (indicated by the indefinite integer).
-    __ cmp(eax, Immediate(0x80000000u));
-    __ j(equal, &generic_runtime);
-    __ cvtsi2sd(xmm4, eax);
-    __ ucomisd(xmm2, xmm4);  // Already ruled out NaNs for exponent.
-    __ j(equal, &int_exponent);
-
-    if (exponent_type_ == ON_STACK) {
-      // Detect square root case.  Crankshaft detects constant +/-0.5 at
-      // compile time and uses DoMathPowHalf instead.  We then skip this check
-      // for non-constant cases of +/-0.5 as these hardly occur.
-      Label continue_sqrt, continue_rsqrt, not_plus_half;
-      // Test for 0.5.
-      // Load xmm4 with 0.5.
-      __ mov(ecx, Immediate(0x3F000000u));
-      __ movd(xmm4, ecx);
-      __ cvtss2sd(xmm4, xmm4);
-      // xmm4 now has 0.5.
-      __ ucomisd(xmm4, xmm2);  // Already ruled out NaNs for exponent.
-      __ j(not_equal, &not_plus_half, Label::kNear);
-
-      // Calculates square root of base.  Check for the special case of
-      // Math.pow(-Infinity, 0.5) == Infinity (ECMA spec, 15.8.2.13).
-      // According to IEEE-754, single-precision -Infinity has the highest
-      // 9 bits set and the lowest 23 bits cleared.
-      __ mov(ecx, 0xFF800000u);
-      __ movd(xmm4, ecx);
-      __ cvtss2sd(xmm4, xmm4);
-      __ ucomisd(xmm1, xmm4);
-      // Comparing -Infinity with NaN results in "unordered", which sets the
-      // zero flag as if both were equal.  However, it also sets the carry flag.
-      __ j(not_equal, &continue_sqrt, Label::kNear);
-      __ j(carry, &continue_sqrt, Label::kNear);
-
-      // Set result to Infinity in the special case.
-      __ xorps(xmm3, xmm3);
-      __ subsd(xmm3, xmm4);
-      __ jmp(&done);
-
-      __ bind(&continue_sqrt);
-      // sqrtsd returns -0 when input is -0.  ECMA spec requires +0.
-      __ xorps(xmm4, xmm4);
-      __ addsd(xmm4, xmm1);  // Convert -0 to +0.
-      __ sqrtsd(xmm3, xmm4);
-      __ jmp(&done);
-
-      // Test for -0.5.
-      __ bind(&not_plus_half);
-      // Load xmm2 with -0.5.
-      // Since xmm3 is 1 and xmm4 is 0.5 this is simply xmm4 - xmm3.
-      __ subsd(xmm4, xmm3);
-      // xmm4 now has -0.5.
-      __ ucomisd(xmm4, xmm2);  // Already ruled out NaNs for exponent.
-      __ j(not_equal, &fast_power, Label::kNear);
-
-      // Calculates reciprocal of square root of base.  Check for the special
-      // case of Math.pow(-Infinity, -0.5) == 0 (ECMA spec, 15.8.2.13).
-      // According to IEEE-754, single-precision -Infinity has the highest
-      // 9 bits set and the lowest 23 bits cleared.
-      __ mov(ecx, 0xFF800000u);
-      __ movd(xmm4, ecx);
-      __ cvtss2sd(xmm4, xmm4);
-      __ ucomisd(xmm1, xmm4);
-      // Comparing -Infinity with NaN results in "unordered", which sets the
-      // zero flag as if both were equal.  However, it also sets the carry flag.
-      __ j(not_equal, &continue_rsqrt, Label::kNear);
-      __ j(carry, &continue_rsqrt, Label::kNear);
-
-      // Set result to 0 in the special case.
-      __ xorps(xmm3, xmm3);
-      __ jmp(&done);
-
-      __ bind(&continue_rsqrt);
-      // sqrtsd returns -0 when input is -0.  ECMA spec requires +0.
-      __ xorps(xmm2, xmm2);
-      __ addsd(xmm2, xmm1);  // Convert -0 to +0.
-      __ sqrtsd(xmm2, xmm2);
-      __ divsd(xmm3, xmm2);
-      __ jmp(&done);
-    }
-
-    // Using FPU instructions to calculate power.
-    Label fast_power_failed;
-    __ bind(&fast_power);
-    __ fnclex();  // Clear flags to catch exceptions later.
-    // Transfer (B)ase and (E)xponent onto the FPU register stack.
-    __ sub(esp, Immediate(kDoubleSize));
-    __ movdbl(Operand(esp, 0), xmm2);
-    __ fld_d(Operand(esp, 0));  // E
-    __ movdbl(Operand(esp, 0), xmm1);
-    __ fld_d(Operand(esp, 0));  // B, E
-
-    // Exponent is in st(1) and base is in st(0)
-    // B ^ E = (2^(E * log2(B)) - 1) + 1 = (2^X - 1) + 1 for X = E * log2(B)
-    // FYL2X calculates st(1) * log2(st(0))
-    __ fyl2x();    // X
-    __ fld(0);     // X, X
-    __ frndint();  // rnd(X), X
-    __ fsub(1);    // rnd(X), X-rnd(X)
-    __ fxch(1);    // X - rnd(X), rnd(X)
-    // F2XM1 calculates 2^st(0) - 1 for -1 < st(0) < 1
-    __ f2xm1();    // 2^(X-rnd(X)) - 1, rnd(X)
-    __ fld1();     // 1, 2^(X-rnd(X)) - 1, rnd(X)
-    __ faddp(1);   // 1, 2^(X-rnd(X)), rnd(X)
-    // FSCALE calculates st(0) * 2^st(1)
-    __ fscale();   // 2^X, rnd(X)
-    __ fstp(1);
-    // Bail out to runtime in case of exceptions in the status word.
-    __ fnstsw_ax();
-    __ test_b(eax, 0x5F);  // We check for all but precision exception.
-    __ j(not_zero, &fast_power_failed, Label::kNear);
-    __ fstp_d(Operand(esp, 0));
-    __ movdbl(xmm3, Operand(esp, 0));
-    __ add(esp, Immediate(kDoubleSize));
-    __ jmp(&done);
-
-    __ bind(&fast_power_failed);
-    __ fninit();
-    __ add(esp, Immediate(kDoubleSize));
-    __ jmp(&generic_runtime);
-  }
-
-  // Calculate power with integer exponent.
-  __ bind(&int_exponent);
-  // xmm1: base as double that is not +/- Infinity or NaN
-  // eax: exponent as untagged integer
-  __ mov(ecx, eax);      // Back up exponent.
-  __ movsd(xmm4, xmm1);  // Back up base.
-  __ movsd(xmm2, xmm3);  // Load xmm2 with 1.
-
+  // Save exponent in base as we need to check if exponent is negative later.
+  // We know that base and exponent are in different registers.
+  __ mov(edx, eax);
 
   // Get absolute value of exponent.
-  Label no_neg, while_true, no_multiply;
+  Label no_neg;
   __ cmp(eax, 0);
   __ j(greater_equal, &no_neg, Label::kNear);
   __ neg(eax);
   __ bind(&no_neg);
 
+  // Load xmm1 with 1.
+  __ movsd(xmm1, xmm3);
+  Label while_true;
+  Label no_multiply;
+
   __ bind(&while_true);
   __ shr(eax, 1);
   __ j(not_carry, &no_multiply, Label::kNear);
-  __ mulsd(xmm3, xmm1);
+  __ mulsd(xmm1, xmm0);
   __ bind(&no_multiply);
-
-  __ mulsd(xmm1, xmm1);
+  __ mulsd(xmm0, xmm0);
   __ j(not_zero, &while_true);
 
   // base has the original value of the exponent - if the exponent  is
   // negative return 1/result.
-  __ test(ecx, ecx);
-  __ j(positive, &done);
-  __ divsd(xmm2, xmm3);
-  __ movsd(xmm3, xmm2);
-  // Test whether result is zero.  Bail out to check for subnormal result.
-  // Due to subnormals, x^-y == (1/x)^y does not hold in all cases.
-  __ xorps(xmm2, xmm2);
-  __ ucomisd(xmm2, xmm3);  // Result cannot be NaN.
-  __ j(equal, &double_int_runtime);
+  __ test(edx, edx);
+  __ j(positive, &allocate_return);
+  // Special case if xmm1 has reached infinity.
+  __ mov(ecx, Immediate(0x7FB00000));
+  __ movd(xmm0, ecx);
+  __ cvtss2sd(xmm0, xmm0);
+  __ ucomisd(xmm0, xmm1);
+  __ j(equal, &call_runtime);
+  __ divsd(xmm3, xmm1);
+  __ movsd(xmm1, xmm3);
+  __ jmp(&allocate_return);
 
-  // Returning or bailing out.
-  if (exponent_type_ == ON_STACK) {
-    // The stub is called from non-optimized code, which expects the result
-    // as heap number in eax.
-    __ bind(&done);
-    // xmm3: result
-    __ AllocateHeapNumber(eax, ecx, edx, &generic_runtime);
-    __ movdbl(FieldOperand(eax, HeapNumber::kValueOffset), xmm3);
-    __ ret(2 * kPointerSize);
+  // exponent (or both) is a heapnumber - no matter what we should now work
+  // on doubles.
+  __ bind(&exponent_nonsmi);
+  __ cmp(FieldOperand(eax, HeapObject::kMapOffset),
+         factory->heap_number_map());
+  __ j(not_equal, &call_runtime);
+  __ movdbl(xmm1, FieldOperand(eax, HeapNumber::kValueOffset));
+  // Test if exponent is nan.
+  __ ucomisd(xmm1, xmm1);
+  __ j(parity_even, &call_runtime);
 
-    // The arguments are still on the stack.
-    __ bind(&generic_runtime);
-    __ bind(&double_int_runtime);
-    __ TailCallRuntime(Runtime::kMath_pow_cfunction, 2, 1);
-  } else {
-    __ jmp(&done);
+  Label base_not_smi;
+  Label handle_special_cases;
+  __ JumpIfNotSmi(edx, &base_not_smi, Label::kNear);
+  __ SmiUntag(edx);
+  __ cvtsi2sd(xmm0, edx);
+  __ jmp(&handle_special_cases, Label::kNear);
 
-    Label return_from_runtime;
-    StubRuntimeCallHelper callhelper;
-    __ bind(&generic_runtime);
-    // xmm1: base
-    // xmm2: exponent
-    {
-      AllowExternalCallThatCantCauseGC scope(masm);
-      __ PrepareCallCFunction(4, eax);
-      __ movdbl(Operand(esp, 0 * kDoubleSize), xmm1);
-      __ movdbl(Operand(esp, 1 * kDoubleSize), xmm2);
-      __ CallCFunction(
-          ExternalReference::power_double_double_function(masm->isolate()), 4);
-    }
-    __ jmp(&return_from_runtime, Label::kNear);
+  __ bind(&base_not_smi);
+  __ cmp(FieldOperand(edx, HeapObject::kMapOffset),
+         factory->heap_number_map());
+  __ j(not_equal, &call_runtime);
+  __ mov(ecx, FieldOperand(edx, HeapNumber::kExponentOffset));
+  __ and_(ecx, HeapNumber::kExponentMask);
+  __ cmp(ecx, Immediate(HeapNumber::kExponentMask));
+  // base is NaN or +/-Infinity
+  __ j(greater_equal, &call_runtime);
+  __ movdbl(xmm0, FieldOperand(edx, HeapNumber::kValueOffset));
 
-    __ bind(&double_int_runtime);
-    // xmm4: base
-    // ecx: exponent
-    {
-      AllowExternalCallThatCantCauseGC scope(masm);
-      __ PrepareCallCFunction(4, eax);
-      __ movdbl(Operand(esp, 0 * kDoubleSize), xmm4);
-      __ mov(Operand(esp, 1 * kDoubleSize), ecx);
-      __ CallCFunction(
-          ExternalReference::power_double_int_function(masm->isolate()), 4);
-    }
+  // base is in xmm0 and exponent is in xmm1.
+  __ bind(&handle_special_cases);
+  Label not_minus_half;
+  // Test for -0.5.
+  // Load xmm2 with -0.5.
+  __ mov(ecx, Immediate(0xBF000000));
+  __ movd(xmm2, ecx);
+  __ cvtss2sd(xmm2, xmm2);
+  // xmm2 now has -0.5.
+  __ ucomisd(xmm2, xmm1);
+  __ j(not_equal, &not_minus_half, Label::kNear);
 
-    __ bind(&return_from_runtime);
-    // Return value is in st(0) on ia32.
-    // Store it into the (fixed) result register.
-    __ sub(esp, Immediate(kDoubleSize));
-    __ fstp_d(Operand(esp, 0));
-    __ movdbl(xmm3, Operand(esp, 0));
-    __ add(esp, Immediate(kDoubleSize));
+  // Calculates reciprocal of square root.
+  // sqrtsd returns -0 when input is -0.  ECMA spec requires +0.
+  __ xorps(xmm1, xmm1);
+  __ addsd(xmm1, xmm0);
+  __ sqrtsd(xmm1, xmm1);
+  __ divsd(xmm3, xmm1);
+  __ movsd(xmm1, xmm3);
+  __ jmp(&allocate_return);
 
-    // xmm3: result
-    __ bind(&done);
-    __ ret(0);
-  }
+  // Test for 0.5.
+  __ bind(&not_minus_half);
+  // Load xmm2 with 0.5.
+  // Since xmm3 is 1 and xmm2 is -0.5 this is simply xmm2 + xmm3.
+  __ addsd(xmm2, xmm3);
+  // xmm2 now has 0.5.
+  __ ucomisd(xmm2, xmm1);
+  __ j(not_equal, &call_runtime);
+  // Calculates square root.
+  // sqrtsd returns -0 when input is -0.  ECMA spec requires +0.
+  __ xorps(xmm1, xmm1);
+  __ addsd(xmm1, xmm0);
+  __ sqrtsd(xmm1, xmm1);
+
+  __ bind(&allocate_return);
+  __ AllocateHeapNumber(ecx, eax, edx, &call_runtime);
+  __ movdbl(FieldOperand(ecx, HeapNumber::kValueOffset), xmm1);
+  __ mov(eax, ecx);
+  __ ret(2 * kPointerSize);
+
+  __ bind(&call_runtime);
+  __ TailCallRuntime(Runtime::kMath_pow_cfunction, 2, 1);
 }
 
 

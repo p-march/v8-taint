@@ -630,7 +630,6 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_CreateArrayLiteralShallow) {
   // Check if boilerplate exists. If not, create it first.
   Handle<Object> boilerplate(literals->get(literals_index), isolate);
   if (*boilerplate == isolate->heap()->undefined_value()) {
-    ASSERT(*elements != isolate->heap()->empty_fixed_array());
     boilerplate = CreateArrayLiteralBoilerplate(isolate, literals, elements);
     if (boilerplate.is_null()) return Failure::Exception();
     // Update the functions literal and return the boilerplate.
@@ -4741,7 +4740,6 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_StoreArrayLiteralElement) {
   if (value->IsNumber()) {
     ASSERT(elements_kind == FAST_SMI_ONLY_ELEMENTS);
     TransitionElementsKind(object, FAST_DOUBLE_ELEMENTS);
-    TransitionElementsKind(boilerplate_object, FAST_DOUBLE_ELEMENTS);
     ASSERT(object->GetElementsKind() == FAST_DOUBLE_ELEMENTS);
     FixedDoubleArray* double_array =
         FixedDoubleArray::cast(object->elements());
@@ -4751,7 +4749,6 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_StoreArrayLiteralElement) {
     ASSERT(elements_kind == FAST_SMI_ONLY_ELEMENTS ||
            elements_kind == FAST_DOUBLE_ELEMENTS);
     TransitionElementsKind(object, FAST_ELEMENTS);
-    TransitionElementsKind(boilerplate_object, FAST_ELEMENTS);
     FixedArray* object_array =
         FixedArray::cast(object->elements());
     object_array->set(store_index, *value);
@@ -7596,9 +7593,6 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_Math_pow) {
   }
 
   CONVERT_DOUBLE_ARG_CHECKED(y, 1);
-  // Returning a smi would not confuse crankshaft as this part of code is only
-  // run if SSE2 was not available, in which case crankshaft is disabled.
-  if (y == 0) TAINT_RETURN(Smi::FromInt(1));  // Returns 1 if exponent is 0.
   TAINT_RETURN(isolate->heap()->AllocateHeapNumber(power_double_double(x, y)));
 }
 

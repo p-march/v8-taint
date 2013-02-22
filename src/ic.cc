@@ -40,13 +40,13 @@ namespace v8 {
 namespace internal {
 
 #ifdef DEBUG
-char IC::TransitionMarkFromState(IC::State state) {
+static char TransitionMarkFromState(IC::State state) {
   switch (state) {
     case UNINITIALIZED: return '0';
     case PREMONOMORPHIC: return 'P';
     case MONOMORPHIC: return '1';
     case MONOMORPHIC_PROTOTYPE_FAILURE: return '^';
-    case MEGAMORPHIC: return IsGeneric() ? 'G' : 'N';
+    case MEGAMORPHIC: return 'N';
 
     // We never see the debugger states here, because the state is
     // computed from the original code - not the patched code. Let
@@ -80,7 +80,19 @@ void IC::TraceIC(const char* type,
         raw_frame = it.frame();
       }
     }
-    JavaScriptFrame::PrintTop(stdout, false, true);
+    if (raw_frame->is_java_script()) {
+      JavaScriptFrame* frame = JavaScriptFrame::cast(raw_frame);
+      Code* js_code = frame->unchecked_code();
+      // Find the function on the stack and both the active code for the
+      // function and the original code.
+      JSFunction* function = JSFunction::cast(frame->function());
+      function->PrintName();
+      int code_offset =
+          static_cast<int>(address() - js_code->instruction_start());
+      PrintF("+%d", code_offset);
+    } else {
+      PrintF("<unknown>");
+    }
     PrintF(" (%c->%c)",
            TransitionMarkFromState(old_state),
            TransitionMarkFromState(new_state));
@@ -88,18 +100,6 @@ void IC::TraceIC(const char* type,
     PrintF("]\n");
   }
 }
-
-#define TRACE_GENERIC_IC(type, reason)                          \
-  do {                                                          \
-    if (FLAG_trace_ic) {                                        \
-      PrintF("[%s patching generic stub in ", type);            \
-      JavaScriptFrame::PrintTop(stdout, false, true);           \
-      PrintF(" (%s)]\n", reason);                               \
-    }                                                           \
-  } while (false)
-
-#else
-#define TRACE_GENERIC_IC(type, reason)
 #endif  // DEBUG
 
 #define TRACE_IC(type, name, old_state, new_target)             \
@@ -149,7 +149,7 @@ void IC::SkipTaintWrapperIfPresent() {
 
 
 #ifdef ENABLE_DEBUGGER_SUPPORT
-Address IC::OriginalCodeAddress() const {
+Address IC::OriginalCodeAddress() {
   HandleScope scope;
   // Compute the JavaScript frame for the frame pointer of this IC
   // structure. We need this to be able to find the function
@@ -958,7 +958,7 @@ void LoadIC::UpdateCaches(LookupResult* lookup,
             name, receiver, holder, lookup->GetFieldIndex());
         break;
       case CONSTANT_FUNCTION: {
-        Handle<JSFunction> constant(lookup->GetConstantFunction());
+        Handle<Object> constant(lookup->GetConstantFunction());
         code = isolate()->stub_cache()->ComputeLoadConstant(
             name, receiver, holder, constant);
         break;
@@ -1172,8 +1172,6 @@ MaybeObject* KeyedLoadIC::Load(State state,
           stub = ComputeStub(receiver, LOAD, kNonStrictMode, stub);
         }
       }
-    } else {
-      TRACE_GENERIC_IC("KeyedLoadIC", "force generic");
     }
     if (!stub.is_null()) set_target(*stub);
   }
@@ -1220,7 +1218,7 @@ void KeyedLoadIC::UpdateCaches(LookupResult* lookup,
             name, receiver, holder, lookup->GetFieldIndex());
         break;
       case CONSTANT_FUNCTION: {
-        Handle<JSFunction> constant(lookup->GetConstantFunction());
+        Handle<Object> constant(lookup->GetConstantFunction());
         code = isolate()->stub_cache()->ComputeKeyedLoadConstant(
             name, receiver, holder, constant);
         break;
@@ -1546,7 +1544,6 @@ Handle<Code> KeyedIC::ComputeStub(Handle<JSObject> receiver,
   // via megamorphic stubs, since they don't have a map in their relocation info
   // and so the stubs can't be harvested for the object needed for a map check.
   if (target()->type() != NORMAL) {
-    TRACE_GENERIC_IC("KeyedIC", "non-NORMAL target type");
     return generic_stub;
   }
 
@@ -1568,14 +1565,12 @@ Handle<Code> KeyedIC::ComputeStub(Handle<JSObject> receiver,
   if (!map_added) {
     // If the miss wasn't due to an unseen map, a polymorphic stub
     // won't help, use the generic stub.
-    TRACE_GENERIC_IC("KeyedIC", "same map added twice");
     return generic_stub;
   }
 
   // If the maximum number of receiver maps has been exceeded, use the generic
   // version of the IC.
   if (target_receiver_maps.length() > kMaxKeyedPolymorphism) {
-    TRACE_GENERIC_IC("KeyedIC", "max polymorph exceeded");
     return generic_stub;
   }
 
@@ -1761,8 +1756,6 @@ MaybeObject* KeyedStoreIC::Store(State state,
           }
           stub = ComputeStub(receiver, stub_kind, strict_mode, stub);
         }
-      } else {
-        TRACE_GENERIC_IC("KeyedStoreIC", "force generic");
       }
     }
     if (!stub.is_null()) set_target(*stub);

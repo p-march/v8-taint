@@ -443,17 +443,12 @@ class InstanceofStub: public CodeStub {
 
 class MathPowStub: public CodeStub {
  public:
-  enum ExponentType { INTEGER, DOUBLE, TAGGED, ON_STACK};
-
-  explicit MathPowStub(ExponentType exponent_type)
-      : exponent_type_(exponent_type) { }
+  MathPowStub() {}
   virtual void Generate(MacroAssembler* masm);
 
  private:
   virtual CodeStub::Major MajorKey() { return MathPow; }
-  virtual int MinorKey() { return exponent_type_; }
-
-  ExponentType exponent_type_;
+  virtual int MinorKey() { return 0; }
 };
 
 

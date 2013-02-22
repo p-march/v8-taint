@@ -237,9 +237,6 @@ class MacroAssembler: public Assembler {
   void StoreToSafepointRegisterSlot(Register dst, Immediate src);
   void LoadFromSafepointRegisterSlot(Register dst, Register src);
 
-  void LoadHeapObject(Register result, Handle<HeapObject> object);
-  void PushHeapObject(Handle<HeapObject> object);
-
   // ---------------------------------------------------------------------------
   // JavaScript invokes
 
@@ -721,8 +718,10 @@ class MacroAssembler: public Assembler {
   // Move if the registers are not identical.
   void Move(Register target, Register source);
 
+  void Move(Register target, Handle<Object> value);
+
   // Push a handle value.
-  void Push(Handle<Object> handle) { push(Immediate(handle)); }
+  void Push(Handle<Object> handle) { push(handle); }
 
   Handle<Object> CodeObject() {
     ASSERT(!code_object_.is_null());

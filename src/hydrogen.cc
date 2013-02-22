@@ -2766,13 +2766,10 @@ void HGraphBuilder::VisitSwitchStatement(SwitchStatement* stmt) {
   }
 
   // 2. Build all the tests, with dangling true branches
-  int default_id = AstNode::kNoNumber;
   for (int i = 0; i < clause_count; ++i) {
     CaseClause* clause = clauses->at(i);
-    if (clause->is_default()) {
-      default_id = clause->EntryId();
-      continue;
-    }
+    if (clause->is_default()) continue;
+
     if (switch_type == SMI_SWITCH) {
       clause->RecordTypeFeedback(oracle());
     }
@@ -2819,10 +2816,7 @@ void HGraphBuilder::VisitSwitchStatement(SwitchStatement* stmt) {
   HBasicBlock* last_block = current_block();
 
   if (not_string_block != NULL) {
-    int join_id = (default_id != AstNode::kNoNumber)
-        ? default_id
-        : stmt->ExitId();
-    last_block = CreateJoin(last_block, not_string_block, join_id);
+    last_block = CreateJoin(last_block, not_string_block, stmt->ExitId());
   }
 
   // 3. Loop over the clauses and the linked list of tests in lockstep,
@@ -3238,11 +3232,11 @@ void HGraphBuilder::VisitVariableProxy(VariableProxy* expr) {
   ASSERT(current_block() != NULL);
   ASSERT(current_block()->HasPredecessor());
   Variable* variable = expr->var();
+  if (variable->mode() == LET) {
+    return Bailout("reference to let variable");
+  }
   switch (variable->location()) {
     case Variable::UNALLOCATED: {
-      if (variable->mode() == LET || variable->mode() == CONST_HARMONY) {
-        return Bailout("reference to global harmony declared variable");
-      }
       // Handle known global constants like 'undefined' specially to avoid a
       // load from a global cell for them.
       Handle<Object> constant_value =
@@ -3285,19 +3279,14 @@ void HGraphBuilder::VisitVariableProxy(VariableProxy* expr) {
     case Variable::PARAMETER:
     case Variable::LOCAL: {
       HValue* value = environment()->Lookup(variable);
-      if (value == graph()->GetConstantHole()) {
-        ASSERT(variable->mode() == CONST ||
-               variable->mode() == CONST_HARMONY ||
-               variable->mode() == LET);
-        return Bailout("reference to uninitialized variable");
+      if (variable->mode() == CONST &&
+          value == graph()->GetConstantHole()) {
+        return Bailout("reference to uninitialized const variable");
       }
       return ast_context()->ReturnValue(value);
     }
 
     case Variable::CONTEXT: {
-      if (variable->mode() == LET || variable->mode() == CONST_HARMONY) {
-        return Bailout("reference to harmony declared context slot");
-      }
       if (variable->mode() == CONST) {
         return Bailout("reference to const context slot");
       }
@@ -3346,13 +3335,13 @@ static bool IsFastObjectLiteral(Handle<JSObject> boilerplate,
                                 int* total_size) {
   if (max_depth <= 0) return false;
 
-  Handle<FixedArrayBase> elements(boilerplate->elements());
+  FixedArrayBase* elements = boilerplate->elements();
   if (elements->length() > 0 &&
       elements->map() != HEAP->fixed_cow_array_map()) {
     return false;
   }
 
-  Handle<FixedArray> properties(boilerplate->properties());
+  FixedArray* properties = boilerplate->properties();
   if (properties->length() > 0) {
     return false;
   } else {
@@ -3478,25 +3467,11 @@ void HGraphBuilder::VisitArrayLiteral(ArrayLiteral* expr) {
   int length = subexprs->length();
   HValue* context = environment()->LookupContext();
 
-  Handle<FixedArray> literals(environment()->closure()->literals());
-  Handle<Object> raw_boilerplate(literals->get(expr->literal_index()));
-
-  // For now, no boilerplate causes a deopt.
-  if (raw_boilerplate->IsUndefined()) {
-    AddInstruction(new(zone()) HSoftDeoptimize);
-    return ast_context()->ReturnValue(graph()->GetConstantUndefined());
-  }
-
-  Handle<JSObject> boilerplate(Handle<JSObject>::cast(raw_boilerplate));
-  ElementsKind boilerplate_elements_kind = boilerplate->GetElementsKind();
-
-  HArrayLiteral* literal = new(zone()) HArrayLiteral(
-      context,
-      boilerplate,
-      length,
-      expr->literal_index(),
-      expr->depth());
-
+  HArrayLiteral* literal = new(zone()) HArrayLiteral(context,
+                                                     expr->constant_elements(),
+                                                     length,
+                                                     expr->literal_index(),
+                                                     expr->depth());
   // The array is expected in the bailout environment during computation
   // of the property values and is the value of the entire expression.
   PushAndAdd(literal);
@@ -3519,25 +3494,42 @@ void HGraphBuilder::VisitArrayLiteral(ArrayLiteral* expr) {
     HValue* key = AddInstruction(
         new(zone()) HConstant(Handle<Object>(Smi::FromInt(i)),
                               Representation::Integer32()));
+    HInstruction* elements_kind =
+        AddInstruction(new(zone()) HElementsKind(literal));
+    HBasicBlock* store_fast = graph()->CreateBasicBlock();
+    // Two empty blocks to satisfy edge split form.
+    HBasicBlock* store_fast_edgesplit1 = graph()->CreateBasicBlock();
+    HBasicBlock* store_fast_edgesplit2 = graph()->CreateBasicBlock();
+    HBasicBlock* store_generic = graph()->CreateBasicBlock();
+    HBasicBlock* check_smi_only_elements = graph()->CreateBasicBlock();
+    HBasicBlock* join = graph()->CreateBasicBlock();
 
-    switch (boilerplate_elements_kind) {
-      case FAST_SMI_ONLY_ELEMENTS:
-      case FAST_ELEMENTS:
-        AddInstruction(new(zone()) HStoreKeyedFastElement(
-            elements,
-            key,
-            value,
-            boilerplate_elements_kind));
-        break;
-      case FAST_DOUBLE_ELEMENTS:
-        AddInstruction(new(zone()) HStoreKeyedFastDoubleElement(elements,
-                                                                key,
-                                                                value));
-        break;
-      default:
-        UNREACHABLE();
-        break;
-    }
+    HIsSmiAndBranch* smicheck = new(zone()) HIsSmiAndBranch(value);
+    smicheck->SetSuccessorAt(0, store_fast_edgesplit1);
+    smicheck->SetSuccessorAt(1, check_smi_only_elements);
+    current_block()->Finish(smicheck);
+    store_fast_edgesplit1->Finish(new(zone()) HGoto(store_fast));
+
+    set_current_block(check_smi_only_elements);
+    HCompareConstantEqAndBranch* smi_elements_check =
+        new(zone()) HCompareConstantEqAndBranch(elements_kind,
+                                                FAST_ELEMENTS,
+                                                Token::EQ_STRICT);
+    smi_elements_check->SetSuccessorAt(0, store_fast_edgesplit2);
+    smi_elements_check->SetSuccessorAt(1, store_generic);
+    current_block()->Finish(smi_elements_check);
+    store_fast_edgesplit2->Finish(new(zone()) HGoto(store_fast));
+
+    set_current_block(store_fast);
+    AddInstruction(new(zone()) HStoreKeyedFastElement(elements, key, value));
+    store_fast->Goto(join);
+
+    set_current_block(store_generic);
+    AddInstruction(BuildStoreKeyedGeneric(literal, key, value));
+    store_generic->Goto(join);
+
+    join->SetJoinId(expr->id());
+    set_current_block(join);
 
     AddSimulate(expr->GetIdForElement(i));
   }
@@ -3989,16 +3981,7 @@ void HGraphBuilder::VisitAssignment(Assignment* expr) {
       HValue* old_value = environment()->Lookup(var);
       AddInstruction(new HUseConst(old_value));
     } else if (var->mode() == LET) {
-      if (!var->IsStackAllocated()) {
-        return Bailout("assignment to let context slot");
-      }
-    } else if (var->mode() == CONST_HARMONY) {
-      if (expr->op() != Token::INIT_CONST_HARMONY) {
-        return Bailout("non-initializer assignment to const");
-      }
-      if (!var->IsStackAllocated()) {
-        return Bailout("assignment to const context slot");
-      }
+      return Bailout("unsupported assignment to let");
     }
 
     if (proxy->IsArguments()) return Bailout("assignment to arguments");
@@ -4015,14 +3998,6 @@ void HGraphBuilder::VisitAssignment(Assignment* expr) {
 
       case Variable::PARAMETER:
       case Variable::LOCAL: {
-        // Perform an initialization check for let declared variables
-        // or parameters.
-        if (var->mode() == LET && expr->op() == Token::ASSIGN) {
-          HValue* env_value = environment()->Lookup(var);
-          if (env_value == graph()->GetConstantHole()) {
-            return Bailout("assignment to let variable before initialization");
-          }
-        }
         // We do not allow the arguments object to occur in a context where it
         // may escape, but assignments to stack-allocated locals are
         // permitted.
@@ -6371,22 +6346,23 @@ void HGraphBuilder::VisitDeclaration(Declaration* decl) {
 void HGraphBuilder::HandleDeclaration(VariableProxy* proxy,
                                       VariableMode mode,
                                       FunctionLiteral* function) {
+  if (mode == LET || mode == CONST_HARMONY) {
+    return Bailout("unsupported harmony declaration");
+  }
   Variable* var = proxy->var();
-  bool binding_needs_init =
-      (mode == CONST || mode == CONST_HARMONY || mode == LET);
   switch (var->location()) {
     case Variable::UNALLOCATED:
       return Bailout("unsupported global declaration");
     case Variable::PARAMETER:
     case Variable::LOCAL:
     case Variable::CONTEXT:
-      if (binding_needs_init || function != NULL) {
+      if (mode == CONST || function != NULL) {
         HValue* value = NULL;
-        if (function != NULL) {
+        if (mode == CONST) {
+          value = graph()->GetConstantHole();
+        } else {
           VisitForValue(function);
           value = Pop();
-        } else {
-          value = graph()->GetConstantHole();
         }
         if (var->IsContextSlot()) {
           HValue* context = environment()->LookupContext();

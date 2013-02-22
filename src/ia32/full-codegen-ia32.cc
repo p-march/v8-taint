@@ -2989,7 +2989,7 @@ void FullCodeGenerator::EmitMathPow(CallRuntime* expr) {
   VisitForStackValue(args->at(1));
 
   if (CpuFeatures::IsSupported(SSE2)) {
-    MathPowStub stub(MathPowStub::ON_STACK);
+    MathPowStub stub;
     __ CallStub(&stub);
   } else {
     __ CallRuntime(Runtime::kMath_pow, 2);
@@ -3918,7 +3918,7 @@ void FullCodeGenerator::VisitUnaryOperation(UnaryOperation* expr) {
         if (context()->IsAccumulatorValue()) {
           __ mov(eax, isolate()->factory()->true_value());
         } else {
-          __ Push(isolate()->factory()->true_value());
+          __ push(isolate()->factory()->true_value());
         }
         __ jmp(&done, Label::kNear);
         __ bind(&materialize_false);
@@ -3926,7 +3926,7 @@ void FullCodeGenerator::VisitUnaryOperation(UnaryOperation* expr) {
         if (context()->IsAccumulatorValue()) {
           __ mov(eax, isolate()->factory()->false_value());
         } else {
-          __ Push(isolate()->factory()->false_value());
+          __ push(isolate()->factory()->false_value());
         }
         __ bind(&done);
       }

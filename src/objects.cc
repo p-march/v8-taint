@@ -1970,6 +1970,8 @@ MaybeObject* JSObject::AddConstantFunctionProperty(
     String* name,
     JSFunction* function,
     PropertyAttributes attributes) {
+  ASSERT(!GetHeap()->InNewSpace(function));
+
   // Allocate new instance descriptors with (name, function) added
   ConstantFunctionDescriptor d(name, function, attributes);
   Object* new_descriptors;
@@ -2084,7 +2086,7 @@ MaybeObject* JSObject::AddProperty(String* name,
     // Ensure the descriptor array does not get too big.
     if (map_of_this->instance_descriptors()->number_of_descriptors() <
         DescriptorArray::kMaxNumberOfDescriptors) {
-      if (value->IsJSFunction()) {
+      if (value->IsJSFunction() && !heap->InNewSpace(value)) {
         return AddConstantFunctionProperty(name,
                                            JSFunction::cast(value),
                                            attributes);
@@ -3449,6 +3451,7 @@ MaybeObject* JSObject::SetPropertyForResult(LookupResult* result,
       ASSERT(target_descriptors->GetType(number) == CONSTANT_FUNCTION);
       JSFunction* function =
           JSFunction::cast(target_descriptors->GetValue(number));
+      ASSERT(!HEAP->InNewSpace(function));
       if (value == function) {
         set_map(target_map);
         return value;
@@ -5931,9 +5934,7 @@ MaybeObject* FixedArray::CopySize(int new_length) {
   AssertNoAllocation no_gc;
   int len = length();
   if (new_length < len) len = new_length;
-  // We are taking the map from the old fixed array so the map is sure to
-  // be an immortal immutable object.
-  result->set_map_unsafe(map());
+  result->set_map(map());
   WriteBarrierMode mode = result->GetWriteBarrierMode(no_gc);
   for (int i = 0; i < len; i++) {
     result->set(i, get(i), mode);
@@ -6173,7 +6174,7 @@ void DescriptorArray::SortUnchecked(const WhitenessWitness& witness) {
         }
       }
       if (child_hash <= parent_hash) break;
-      NoIncrementalWriteBarrierSwapDescriptors(parent_index, child_index);
+      NoWriteBarrierSwapDescriptors(parent_index, child_index);
       // Now element at child_index could be < its children.
       parent_index = child_index;  // parent_hash remains correct.
     }
@@ -6182,7 +6183,7 @@ void DescriptorArray::SortUnchecked(const WhitenessWitness& witness) {
   // Extract elements and create sorted array.
   for (int i = len - 1; i > 0; --i) {
     // Put max element at the back of the array.
-    NoIncrementalWriteBarrierSwapDescriptors(0, i);
+    NoWriteBarrierSwapDescriptors(0, i);
     // Shift down the new top element.
     int parent_index = 0;
     const uint32_t parent_hash = GetKey(parent_index)->Hash();
@@ -6198,7 +6199,7 @@ void DescriptorArray::SortUnchecked(const WhitenessWitness& witness) {
         }
       }
       if (child_hash <= parent_hash) break;
-      NoIncrementalWriteBarrierSwapDescriptors(parent_index, child_index);
+      NoWriteBarrierSwapDescriptors(parent_index, child_index);
       parent_index = child_index;
     }
   }
@@ -8177,22 +8178,6 @@ void SharedFunctionInfo::CompleteInobjectSlackTracking() {
 }
 
 
-#define DECLARE_TAG(ignore1, name, ignore2) name,
-const char* const VisitorSynchronization::kTags[
-    VisitorSynchronization::kNumberOfSyncTags] = {
-  VISITOR_SYNCHRONIZATION_TAGS_LIST(DECLARE_TAG)
-};
-#undef DECLARE_TAG
-
-
-#define DECLARE_TAG(ignore1, ignore2, name) name,
-const char* const VisitorSynchronization::kTagNames[
-    VisitorSynchronization::kNumberOfSyncTags] = {
-  VISITOR_SYNCHRONIZATION_TAGS_LIST(DECLARE_TAG)
-};
-#undef DECLARE_TAG
-
-
 void ObjectVisitor::VisitCodeTarget(RelocInfo* rinfo) {
   ASSERT(RelocInfo::IsCodeTarget(rinfo->rmode()));
   Object* target = Code::GetCodeFromTargetAddress(rinfo->target_address());
@@ -8670,20 +8655,9 @@ void Code::Disassemble(const char* name, FILE* out) {
 static void CopyFastElementsToFast(FixedArray* source,
                                    FixedArray* destination,
                                    WriteBarrierMode mode) {
-  int count = source->length();
-  if (mode == SKIP_WRITE_BARRIER ||
-      !Page::FromAddress(destination->address())->IsFlagSet(
-          MemoryChunk::POINTERS_FROM_HERE_ARE_INTERESTING)) {
-    ASSERT(count <= destination->length());
-    Address to = destination->address() + FixedArray::kHeaderSize;
-    Address from = source->address() + FixedArray::kHeaderSize;
-    memcpy(reinterpret_cast<void*>(to),
-           reinterpret_cast<void*>(from),
-           kPointerSize * count);
-  } else {
-    for (int i = 0; i < count; ++i) {
-      destination->set(i, source->get(i), mode);
-    }
+  uint32_t count = static_cast<uint32_t>(source->length());
+  for (uint32_t i = 0; i < count; ++i) {
+    destination->set(i, source->get(i), mode);
   }
 }
 

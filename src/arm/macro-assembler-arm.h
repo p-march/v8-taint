@@ -166,8 +166,6 @@ class MacroAssembler: public Assembler {
                  Heap::RootListIndex index,
                  Condition cond = al);
 
-  void LoadHeapObject(Register dst, Handle<HeapObject> object);
-
   // ---------------------------------------------------------------------------
   // GC Support
 

@@ -125,8 +125,7 @@ MaybeObject* Heap::AllocateAsciiSymbol(Vector<const char> str,
     if (!maybe_result->ToObject(&result)) return maybe_result;
   }
 
-  // String maps are all immortal immovable objects.
-  reinterpret_cast<HeapObject*>(result)->set_map_unsafe(map);
+  reinterpret_cast<HeapObject*>(result)->set_map(map);
   // Set length and hash fields of the allocated string.
   String* answer = String::cast(result);
   answer->set_length(str.length());

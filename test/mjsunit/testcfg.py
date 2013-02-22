@@ -128,7 +128,6 @@ class MjsunitTestConfiguration(test.TestConfiguration):
     tools = [current_path + ['tools', t] for t in self.Ls(join(self.root, 'tools'))]
     compiler = [current_path + ['compiler', t] for t in self.Ls(join(self.root, 'compiler'))]
     harmony = [current_path + ['harmony', t] for t in self.Ls(join(self.root, 'harmony'))]
-    taint = [current_path + ['taint', t] for t in self.Ls(join(self.root, 'taint'))]
     mjsunit.sort()
     regress.sort()
     bugs.sort()
@@ -136,8 +135,7 @@ class MjsunitTestConfiguration(test.TestConfiguration):
     tools.sort()
     compiler.sort()
     harmony.sort()
-    taint.sort()
-    all_tests = mjsunit + regress + bugs + third_party + tools + compiler + harmony + taint
+    all_tests = mjsunit + regress + bugs + third_party + tools + compiler + harmony
     result = []
     for test in all_tests:
       if self.Contains(path, test):

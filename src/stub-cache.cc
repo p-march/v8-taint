@@ -185,7 +185,7 @@ Handle<Code> StubCache::ComputeLoadCallback(Handle<String> name,
 Handle<Code> StubCache::ComputeLoadConstant(Handle<String> name,
                                             Handle<JSObject> receiver,
                                             Handle<JSObject> holder,
-                                            Handle<JSFunction> value) {
+                                            Handle<Object> value) {
   ASSERT(IC::GetCodeCacheForObject(*receiver, *holder) == OWN_MAP);
   Code::Flags flags =
       Code::ComputeMonomorphicFlags(Code::LOAD_IC, CONSTANT_FUNCTION);
@@ -267,7 +267,7 @@ Handle<Code> StubCache::ComputeKeyedLoadField(Handle<String> name,
 Handle<Code> StubCache::ComputeKeyedLoadConstant(Handle<String> name,
                                                  Handle<JSObject> receiver,
                                                  Handle<JSObject> holder,
-                                                 Handle<JSFunction> value) {
+                                                 Handle<Object> value) {
   ASSERT(IC::GetCodeCacheForObject(*receiver, *holder) == OWN_MAP);
   Code::Flags flags =
       Code::ComputeMonomorphicFlags(Code::KEYED_LOAD_IC, CONSTANT_FUNCTION);

@@ -1153,11 +1153,6 @@ LInstruction* LChunkBuilder::DoUnaryMathOperation(HUnaryMathOperation* instr) {
     LOperand* input = UseFixedDouble(instr->value(), d2);
     LUnaryMathOperation* result = new LUnaryMathOperation(input, NULL);
     return MarkAsCall(DefineFixedDouble(result, d2), instr);
-  } else if (op == kMathPowHalf) {
-    LOperand* input = UseFixedDouble(instr->value(), d2);
-    LOperand* temp = FixedTemp(d3);
-    LUnaryMathOperation* result = new LUnaryMathOperation(input, temp);
-    return DefineFixedDouble(result, d2);
   } else {
     LOperand* input = UseRegisterAtStart(instr->value());
     LOperand* temp = (op == kMathFloor) ? TempRegister() : NULL;
@@ -1171,6 +1166,8 @@ LInstruction* LChunkBuilder::DoUnaryMathOperation(HUnaryMathOperation* instr) {
         return DefineAsRegister(result);
       case kMathRound:
         return AssignEnvironment(DefineAsRegister(result));
+      case kMathPowHalf:
+        return DefineAsRegister(result);
       default:
         UNREACHABLE();
         return NULL;

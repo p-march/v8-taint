@@ -6869,7 +6869,7 @@ TEST(DebugBreakFunctionApply) {
   foo->Call(env->Global(), 0, NULL);
 
   // When keeping the debug break several break will happen.
-  CHECK_GT(break_point_hit_count, 1);
+  CHECK_EQ(3, break_point_hit_count);
 
   v8::Debug::SetDebugEventListener(NULL);
   CheckDebuggerUnloaded();

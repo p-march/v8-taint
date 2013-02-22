@@ -200,6 +200,7 @@ class LCodeGen BASE_EMBEDDED {
                          LInstruction* instr,
                          CallKind call_kind);
 
+  void LoadHeapObject(Register result, Handle<HeapObject> object);
 
   void RecordSafepointWithLazyDeopt(LInstruction* instr,
                                     SafepointMode safepoint_mode,
@@ -306,7 +307,7 @@ class LCodeGen BASE_EMBEDDED {
     Address address;
   };
 
-  void EnsureSpaceForLazyDeopt(int space_needed);
+  void EnsureSpaceForLazyDeopt();
 
   LChunk* const chunk_;
   MacroAssembler* const masm_;

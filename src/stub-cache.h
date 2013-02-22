@@ -92,7 +92,7 @@ class StubCache {
   Handle<Code> ComputeLoadConstant(Handle<String> name,
                                    Handle<JSObject> receiver,
                                    Handle<JSObject> holder,
-                                   Handle<JSFunction> value);
+                                   Handle<Object> value);
 
   Handle<Code> ComputeLoadInterceptor(Handle<String> name,
                                       Handle<JSObject> receiver,
@@ -121,7 +121,7 @@ class StubCache {
   Handle<Code> ComputeKeyedLoadConstant(Handle<String> name,
                                         Handle<JSObject> receiver,
                                         Handle<JSObject> holder,
-                                        Handle<JSFunction> value);
+                                        Handle<Object> value);
 
   Handle<Code> ComputeKeyedLoadInterceptor(Handle<String> name,
                                            Handle<JSObject> receiver,
@@ -524,7 +524,7 @@ class StubCompiler BASE_EMBEDDED {
                             Register scratch1,
                             Register scratch2,
                             Register scratch3,
-                            Handle<JSFunction> value,
+                            Handle<Object> value,
                             Handle<String> name,
                             Label* miss);
 
@@ -574,7 +574,7 @@ class LoadStubCompiler: public StubCompiler {
 
   Handle<Code> CompileLoadConstant(Handle<JSObject> object,
                                    Handle<JSObject> holder,
-                                   Handle<JSFunction> value,
+                                   Handle<Object> value,
                                    Handle<String> name);
 
   Handle<Code> CompileLoadInterceptor(Handle<JSObject> object,
@@ -611,7 +611,7 @@ class KeyedLoadStubCompiler: public StubCompiler {
   Handle<Code> CompileLoadConstant(Handle<String> name,
                                    Handle<JSObject> object,
                                    Handle<JSObject> holder,
-                                   Handle<JSFunction> value);
+                                   Handle<Object> value);
 
   Handle<Code> CompileLoadInterceptor(Handle<JSObject> object,
                                       Handle<JSObject> holder,
