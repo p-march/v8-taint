@@ -193,7 +193,14 @@ var knownProblems = {
 
   // Only applicable to strings.
   "_HasCachedArrayIndex": true,
-  "_GetCachedArrayIndex": true
+  "_GetCachedArrayIndex": true,
+  "Info": true,
+  "Taint": true,
+  "DeepTaint": true,
+  "ContextPrint": true,
+  "Untaint": true,
+  "Untaintable": true,
+  "_TaintNot": true
 };
 
 var currentlyUncallable = {

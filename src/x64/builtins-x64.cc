@@ -201,9 +201,9 @@ static void Generate_JSConstructStubHelper(MacroAssembler* masm,
       // rdi: start of next object
       __ movq(Operand(rbx, JSObject::kMapOffset), rax);
       __ LoadRoot(rcx, Heap::kEmptyFixedArrayRootIndex);
-      __ movq(Operand(rbx, JSObject::kTaintedOffset), Immediate(0));
       __ movq(Operand(rbx, JSObject::kPropertiesOffset), rcx);
       __ movq(Operand(rbx, JSObject::kElementsOffset), rcx);
+      __ movq(Operand(rbx, JSObject::kTaintedOffset), Immediate(0));
       // Set extra fields in the newly allocated object.
       // rax: initial map
       // rbx: JSObject
@@ -1032,10 +1032,10 @@ static void AllocateEmptyJSArray(MacroAssembler* masm,
   // scratch2: start of next object
   Factory* factory = masm->isolate()->factory();
   __ movq(FieldOperand(result, JSObject::kMapOffset), scratch1);
-  __ movq(FieldOperand(result, JSArray::kTaintedOffset), Immediate(0));
   __ Move(FieldOperand(result, JSArray::kPropertiesOffset),
           factory->empty_fixed_array());
   // Field JSArray::kElementsOffset is initialized later.
+  __ Move(FieldOperand(result, JSArray::kTaintedOffset), Smi::FromInt(0));
   __ Move(FieldOperand(result, JSArray::kLengthOffset), Smi::FromInt(0));
 
   // If no storage is requested for the elements array just set the empty
@@ -1142,9 +1142,9 @@ static void AllocateJSArray(MacroAssembler* masm,
   Factory* factory = masm->isolate()->factory();
   __ movq(FieldOperand(result, JSObject::kMapOffset), elements_array);
   __ Move(elements_array, factory->empty_fixed_array());
-  __ movq(FieldOperand(result, JSArray::kTaintedOffset), Immediate(0));
   __ movq(FieldOperand(result, JSArray::kPropertiesOffset), elements_array);
   // Field JSArray::kElementsOffset is initialized later.
+  __ Move(FieldOperand(result, JSArray::kTaintedOffset), Smi::FromInt(0));
   __ movq(FieldOperand(result, JSArray::kLengthOffset), array_size);
 
   // Calculate the location of the elements array and set elements array member

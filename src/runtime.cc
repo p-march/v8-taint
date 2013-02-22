@@ -65,7 +65,7 @@ namespace internal {
 
 // CLEAN(petr):
 #define RUNTIME_ASSERT(value) \
-  if (!(value)) {ASSERT(0); return isolate->ThrowIllegalOperation();}
+  if (!(value)) {return isolate->ThrowIllegalOperation();}
 
 // Cast the given object to a value of the specified type and store
 // it in a variable with the given name.  If the object is not of the
@@ -1479,6 +1479,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_DeclareContextSlot) {
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_InitializeVarGlobal) {
+  RUNTIME_ASSERT(args.length() == 2 || args.length() == 3);
   UNTAINT_ARGS(2); // do not untaint value
   NoHandleAllocation nha;
   // args[0] == name
@@ -1487,7 +1488,6 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_InitializeVarGlobal) {
 
   // Determine if we need to assign to the variable if it already
   // exists (based on the number of arguments).
-  RUNTIME_ASSERT(args.length() == 2 || args.length() == 3);
   bool assign = args.length() == 3;
 
   CONVERT_ARG_CHECKED(String, name, 0);
@@ -4653,12 +4653,12 @@ MaybeObject* Runtime::ForceDeleteObjectProperty(Isolate* isolate,
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_SetProperty) {
+  RUNTIME_ASSERT(args.length() == 4 || args.length() == 5);
   UNTAINT_ARGS(2); // do not untaint value
   UNTAINT_ARG(args[3]);
   if (args.length() == 5)
     UNTAINT_ARG(args[4]);
   NoHandleAllocation ha;
-  RUNTIME_ASSERT(args.length() == 4 || args.length() == 5);
 
   Handle<Object> object = args.at<Object>(0);
   Handle<Object> key = args.at<Object>(1);

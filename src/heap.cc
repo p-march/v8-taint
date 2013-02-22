@@ -2837,6 +2837,7 @@ MaybeObject* Heap::AllocateJSMessageObject(String* type,
   JSMessageObject* message = JSMessageObject::cast(result);
   message->set_properties(Heap::empty_fixed_array(), SKIP_WRITE_BARRIER);
   message->set_elements(Heap::empty_fixed_array(), SKIP_WRITE_BARRIER);
+  message->initialize_tainted();
   message->set_type(type);
   message->set_arguments(arguments);
   message->set_start_position(start_position);
@@ -3634,9 +3635,9 @@ MaybeObject* Heap::AllocateInitialMap(JSFunction* fun) {
 void Heap::InitializeJSObjectFromMap(JSObject* obj,
                                      FixedArray* properties,
                                      Map* map) {
-  obj->initialize_tainted();
   obj->set_properties(properties);
   obj->initialize_elements();
+  obj->initialize_tainted();
   // TODO(1240798): Initialize the object's body using valid initial values
   // according to the object's initial map.  For example, if the map's
   // instance type is JS_ARRAY_TYPE, the length field should be initialized
@@ -3838,6 +3839,7 @@ MaybeObject* Heap::AllocateGlobalObject(JSFunction* constructor) {
   global->set_map(new_map);
   global->map()->clear_instance_descriptors();
   global->set_properties(dictionary);
+  global->initialize_tainted();
 
   // Make sure result is a global object with properties in dictionary.
   ASSERT(global->IsGlobalObject());
@@ -3913,6 +3915,7 @@ MaybeObject* Heap::CopyJSObject(JSObject* source) {
     }
     JSObject::cast(clone)->set_properties(FixedArray::cast(prop), wb_mode);
   }
+  JSObject::cast(clone)->set_tainted(source->tainted(), wb_mode);
   // Return the new clone.
   return clone;
 }

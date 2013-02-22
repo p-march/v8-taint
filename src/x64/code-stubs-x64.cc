@@ -102,9 +102,9 @@ void FastNewClosureStub::Generate(MacroAssembler* masm) {
   __ LoadRoot(rbx, Heap::kEmptyFixedArrayRootIndex);
   __ LoadRoot(rcx, Heap::kTheHoleValueRootIndex);
   __ LoadRoot(rdi, Heap::kUndefinedValueRootIndex);
-  __ movq(FieldOperand(rax, JSObject::kTaintedOffset), Immediate(0));
   __ movq(FieldOperand(rax, JSObject::kPropertiesOffset), rbx);
   __ movq(FieldOperand(rax, JSObject::kElementsOffset), rbx);
+  __ Move(FieldOperand(rax, JSObject::kTaintedOffset), Smi::FromInt(0));
   __ movq(FieldOperand(rax, JSFunction::kPrototypeOrInitialMapOffset), rcx);
   __ movq(FieldOperand(rax, JSFunction::kSharedFunctionInfoOffset), rdx);
   __ movq(FieldOperand(rax, JSFunction::kContextOffset), rsi);
@@ -3031,7 +3031,7 @@ void RegExpConstructResultStub::Generate(MacroAssembler* masm) {
   __ movq(rdx, FieldOperand(rdx, GlobalObject::kGlobalContextOffset));
   __ movq(rdx, ContextOperand(rdx, Context::REGEXP_RESULT_MAP_INDEX));
   __ movq(FieldOperand(rax, HeapObject::kMapOffset), rdx);
-  __ movq(FieldOperand(rax, JSObject::kTaintedOffset), Immediate(0));
+  __ Move(FieldOperand(rax, JSObject::kTaintedOffset), Smi::FromInt(0));
 
   // Set empty properties FixedArray.
   __ LoadRoot(kScratchRegister, Heap::kEmptyFixedArrayRootIndex);
