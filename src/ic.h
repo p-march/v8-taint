@@ -103,6 +103,8 @@ class IC {
   Code* target() { return GetTargetAtAddress(address()); }
   inline Address address();
 
+  bool has_taint_wrapper() { return has_taint_wrapper_; }
+
   // Compute the current IC state based on the target stub, receiver and name.
   static State StateFrom(Code* target, Object* receiver, Object* name);
 
@@ -165,10 +167,12 @@ class IC {
 
   // Set the call-site target.
   void set_target(Code* code) {
-    SkipTaintWrapperIfPresent();
-    if (FLAG_use_taint_spec && taint_flag_ == TAINT_WRAPPER) {
+    if (FLAG_use_taint_spec &&
+        taint_flag_ == TAINT_WRAPPER &&
+        !has_taint_wrapper()) {
       code = GetTaintWrapper(code);
     }
+    ASSERT(!(has_taint_wrapper() && code->is_taint_wrapper_stub()));
     SetTargetAtAddress(address(), code);
   }
 
@@ -197,6 +201,8 @@ class IC {
   // GetProperty and SetProperty are called and they in turn might
   // invoke the garbage collector.
   Address* pc_address_;
+
+  bool has_taint_wrapper_;
 
   Isolate* isolate_;
 

@@ -5973,7 +5973,7 @@ static MaybeObject* QuoteJsonStringArray(Isolate* isolate,
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_QuoteJSONStringArray) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ALL_ARGS();
   NoHandleAllocation ha;
   ASSERT(args.length() == 1);
   CONVERT_CHECKED(JSArray, array, args[0]);
@@ -5986,6 +5986,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_QuoteJSONStringArray) {
 
   for (int i = 0; i < n; i++) {
     Object* elt = elements->get(i);
+    if (elt->IsTainted()) __tainted = true;
     if (!elt->IsString()) return isolate->heap()->undefined_value();
     String* element = String::cast(elt);
     if (!element->IsFlat()) return isolate->heap()->undefined_value();
@@ -6004,13 +6005,13 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_QuoteJSONStringArray) {
   }
 
   if (ascii) {
-    return QuoteJsonStringArray<char, SeqAsciiString>(isolate,
-                                                      elements,
-                                                      worst_case_length);
+    TAINT_RETURN((QuoteJsonStringArray<char, SeqAsciiString>(isolate,
+                                                             elements,
+                                                             worst_case_length)));
   } else {
-    return QuoteJsonStringArray<uc16, SeqTwoByteString>(isolate,
-                                                        elements,
-                                                        worst_case_length);
+    TAINT_RETURN((QuoteJsonStringArray<uc16, SeqTwoByteString>(isolate,
+                                                               elements,
+                                                               worst_case_length)));
   }
 }
 
@@ -6430,8 +6431,8 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_StringSplit) {
   ASSERT(result->HasFastElements());
 
   if (part_count == 1 && indices.at(0) == subject_length) {
-    FixedArray::cast(result->elements())->set(0, TAINT_IF_NEEDED(*subject));
-    return *result;
+    FixedArray::cast(result->elements())->set(0, *subject);
+    TAINT_RETURN(*result);
   }
 
   Handle<FixedArray> elements(FixedArray::cast(result->elements()));
@@ -6441,7 +6442,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_StringSplit) {
     int part_end = indices.at(i);
     Handle<String> substring =
         isolate->factory()->NewProperSubString(subject, part_start, part_end);
-    elements->set(i, TAINT_IF_NEEDED(*substring));
+    elements->set(i, *substring);
     part_start = part_end + pattern_length;
   }
 
@@ -6455,7 +6456,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_StringSplit) {
     }
   }
 
-  return *result;
+  TAINT_RETURN(*result);
 }
 
 
@@ -10385,7 +10386,8 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_RemoveArrayHoles) {
 
 // Move contents of argument 0 (an array) to argument 1 (an array)
 RUNTIME_FUNCTION(MaybeObject*, Runtime_MoveArrayContents) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ARGS(1);
+  UNTAINT(args[1]);
   ASSERT(args.length() == 2);
   CONVERT_CHECKED(JSArray, from, args[0]);
   CONVERT_CHECKED(JSArray, to, args[1]);
@@ -10412,7 +10414,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_MoveArrayContents) {
     if (!maybe_obj->ToObject(&obj)) return maybe_obj;
   }
   from->set_length(Smi::FromInt(0));
-  return to;
+  TAINT_RETURN(to);
 }
 
 
@@ -10469,7 +10471,8 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_SwapElements) {
 // positive (length)) or undefined values.
 // Intervals can span over some keys that are not in the object.
 RUNTIME_FUNCTION(MaybeObject*, Runtime_GetArrayKeys) {
-  ASSERT_IF_TAINTED_ARGS();
+  UNTAINT_ARGS(1);
+  UNTAINT(args[1]);
   ASSERT(args.length() == 2);
   HandleScope scope(isolate);
   CONVERT_ARG_CHECKED(JSObject, array, 0);
@@ -10491,7 +10494,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_GetArrayKeys) {
         keys->set_undefined(i);
       }
     }
-    return *isolate->factory()->NewJSArrayWithElements(keys);
+    TAINT_RETURN(*isolate->factory()->NewJSArrayWithElements(keys));
   } else {
     ASSERT(array->HasFastElements() ||
            array->HasFastSmiOnlyElements() ||
@@ -10506,7 +10509,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_GetArrayKeys) {
     Handle<Object> length_object =
         isolate->factory()->NewNumber(static_cast<double>(min_length));
     single_interval->set(1, *length_object);
-    return *isolate->factory()->NewJSArrayWithElements(single_interval);
+    TAINT_RETURN(*isolate->factory()->NewJSArrayWithElements(single_interval));
   }
 }
 

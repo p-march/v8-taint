@@ -576,6 +576,8 @@ class Assembler : public AssemblerBase {
   // Distance between the address of the code target in the call instruction
   // and the return address pushed on the stack.
   static const int kCallTargetAddressOffset = 4;  // Use 32-bit displacement.
+  static const int kCallOpCodeOffset = 5;  // 1 byte opcode and 32-bit displacement.
+  static const int kCallOpCode = 0xE8;  // 1 byte opcode of a call instruction.
   // Distance between the start of the JS return sequence and where the
   // 32-bit displacement of a near call would be, relative to the pushed
   // return address.  TODO: Use return sequence length instead.

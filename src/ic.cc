@@ -131,8 +131,21 @@ IC::IC(FrameDepth depth, Isolate* isolate, TaintWrapperFlag taint)
   StackFrame* frame = it.frame();
   ASSERT(fp == frame->fp() && pc_address == frame->pc_address());
 #endif
+  bool has_taint_wrapper = false;
+  Object* marker =
+      *reinterpret_cast<Object**>(fp + StandardFrameConstants::kMarkerOffset);
+  if (marker->IsSmi() && Smi::cast(marker)->value() == StackFrame::INTERNAL) {
+    Address caller_pc =
+        *reinterpret_cast<Address*>(fp + StandardFrameConstants::kCallerPCOffset);
+    if (*(caller_pc - Assembler::kCallOpCodeOffset) == Assembler::kCallOpCode) {
+      Address caller_address = caller_pc - Assembler::kCallTargetAddressOffset;
+      has_taint_wrapper = GetTargetAtAddress(caller_address)->is_taint_wrapper_stub();
+    }
+  }
+
   fp_ = fp;
   pc_address_ = pc_address;
+  has_taint_wrapper_ = has_taint_wrapper;
 }
 
 
@@ -321,11 +334,32 @@ void IC::Clear(Address address) {
       return KeyedStoreIC::Clear(address, target);
     case Code::CALL_IC: return CallIC::Clear(address, target);
     case Code::KEYED_CALL_IC:  return KeyedCallIC::Clear(address, target);
+    case Code::TAINT_WRAPPER_IC:
+      target = target->wrapped_code();
+      ASSERT(!target->is_taint_wrapper_stub());
+      if (target->ic_state() == DEBUG_BREAK) return;
+      switch (target->kind()) {
+        case Code::LOAD_IC: return LoadIC::Clear(address, target);
+          case Code::KEYED_LOAD_IC:
+          return KeyedLoadIC::Clear(address, target);
+        case Code::STORE_IC: return StoreIC::Clear(address, target);
+        case Code::KEYED_STORE_IC:
+          return KeyedStoreIC::Clear(address, target);
+        case Code::CALL_IC: return CallIC::Clear(address, target);
+        case Code::KEYED_CALL_IC:  return KeyedCallIC::Clear(address, target);
+        case Code::UNARY_OP_IC:
+        case Code::BINARY_OP_IC:
+        case Code::COMPARE_IC:
+        case Code::TO_BOOLEAN_IC:
+          return;
+        case Code::TAINT_WRAPPER_IC:
+        default: UNREACHABLE();
+      }
+      UNREACHABLE();
     case Code::UNARY_OP_IC:
     case Code::BINARY_OP_IC:
     case Code::COMPARE_IC:
     case Code::TO_BOOLEAN_IC:
-    case Code::TAINT_WRAPPER_IC:
       // Clearing these is tricky and does not
       // make any performance difference.
       return;
@@ -335,6 +369,7 @@ void IC::Clear(Address address) {
 
 
 Code* IC::GetTaintWrapper(Code* target) {
+  ASSERT(!target->is_taint_wrapper_stub());
   if (target->taint_wrapper()->IsCode()) {
     return Code::cast(target->taint_wrapper());
   }

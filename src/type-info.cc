@@ -549,7 +549,7 @@ Object* TypeFeedbackOracle::ProcessTaintWrapperIC(Code *taint_wrapper) {
     case Code::STORE_IC:
     case Code::CALL_IC:
     case Code::KEYED_CALL_IC:
-     if (target->ic_state() == MONOMORPHIC) {
+      if (target->ic_state() == MONOMORPHIC) {
         if (target->kind() == Code::CALL_IC &&
             target->check_type() != RECEIVER_MAP_CHECK) {
           return Smi::FromInt(target->check_type());
@@ -568,6 +568,9 @@ Object* TypeFeedbackOracle::ProcessTaintWrapperIC(Code *taint_wrapper) {
     case Code::KEYED_STORE_IC:
       if (target->ic_state() == MONOMORPHIC ||
           target->ic_state() == MEGAMORPHIC) {
+        return target;
+      }
+      if (target->ic_state() == PREMONOMORPHIC) {
         return target;
       }
       break;

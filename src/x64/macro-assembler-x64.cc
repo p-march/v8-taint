@@ -4448,6 +4448,11 @@ void MacroAssembler::TaintJSObject(Register value,
   jmp(&done);
   bind(&should_taint);
 
+  // NOTE(petr): it is not gc safe to allocate wrapper in
+  // new space while object is in a different space
+  // Note, this is not a problem if done in runtime
+  JumpIfNotInNewSpace(value, scratch1, slow);
+
   // get object size
   movq(scratch1, FieldOperand(value, HeapObject::kMapOffset));
   movzxbq(scratch1, FieldOperand(scratch1, Map::kInstanceSizeOffset));

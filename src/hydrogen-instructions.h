@@ -621,6 +621,7 @@ class HValue: public ZoneObject {
 
   int flags() const { return flags_; }
   void SetFlag(Flag f) { flags_ |= (1 << f); }
+  void SetFlags(int flags) { flags_ |= flags; }
   void ClearFlag(Flag f) { flags_ &= ~(1 << f); }
   bool CheckFlag(Flag f) const { return (flags_ & (1 << f)) != 0; }
 
@@ -635,6 +636,7 @@ class HValue: public ZoneObject {
   int ObservableChangesFlags() const {
     return flags_ & ChangesFlagsMask() & ObservableSideEffects();
   }
+  int SideEffects() const { return flags_ & AllSideEffects(); }
 
   Range* range() const { return range_; }
   bool HasRange() const { return range_ != NULL; }
@@ -4367,7 +4369,6 @@ class HUntaint: public HTemplateInstruction<1> {
 
   explicit HUntaint(HValue* value, HUntaintFlags flags = UNTAINT_ONLY)
       : flags_(flags) {
-    ASSERT(!value->IsConstant());
     SetOperandAt(0, value);
     set_representation(Representation::Tagged());
   }
@@ -4394,6 +4395,10 @@ class HTaintResult: public HTemplateInstruction<1> {
   explicit HTaintResult(HValue* value, bool full_data_taint)
       : full_data_taint_(full_data_taint) {
     SetOperandAt(0, value);
+    if (value->HasSideEffects()) {
+      SetFlags(value->SideEffects());
+      value->ClearAllSideEffects();
+    }
     set_representation(Representation::Tagged());
   }
 

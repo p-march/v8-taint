@@ -1069,7 +1069,9 @@ MaybeObject* Object::Untaint() {
 
 void Object::Untaintable() {
   ASSERT(!this->IsTainted());
-  ASSERT(this->IsTaintJSObject());
+  if (!this->IsTaintJSObject()) {
+    return;
+  }
   JSObject *self = JSObject::cast(this);
   ASSERT(self->tainted() == Smi::FromInt(0) || 
          self->tainted() == self->GetHeap()->null_value());

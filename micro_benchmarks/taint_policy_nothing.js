@@ -125,7 +125,6 @@ function do_nothing(ret, operation, holder, name) {
   return default_action;
 }
 
-
 function TaintPolicyEngine(ret, operation, holder, name) {
   AddFunction(holder, do_nothing);
   NullTaintPolicyFunctions(holder);

@@ -853,6 +853,7 @@ void Assembler::call(Label* L) {
   positions_recorder()->WriteRecordedPositions();
   EnsureSpace ensure_space(this);
   // 1110 1000 #32-bit disp.
+  ASSERT(0xE8 == kCallOpCode);
   emit(0xE8);
   if (L->is_bound()) {
     int offset = L->pos() - pc_offset() - sizeof(int32_t);
@@ -876,6 +877,7 @@ void Assembler::call(Handle<Code> target,
   positions_recorder()->WriteRecordedPositions();
   EnsureSpace ensure_space(this);
   // 1110 1000 #32-bit disp.
+  ASSERT(0xE8 == kCallOpCode);
   emit(0xE8);
   emit_code_target(target, rmode, ast_id);
 }
@@ -909,6 +911,7 @@ void Assembler::call(Address target) {
   positions_recorder()->WriteRecordedPositions();
   EnsureSpace ensure_space(this);
   // 1110 1000 #32-bit disp.
+  ASSERT(0xE8 == kCallOpCode);
   emit(0xE8);
   Address source = pc_ + 4;
   intptr_t displacement = target - source;

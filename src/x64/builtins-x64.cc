@@ -877,6 +877,7 @@ void Builtins::Generate_FunctionApply(MacroAssembler* masm) {
     const int kLimitOffset =
         StandardFrameConstants::kExpressionsOffset - 1 * kPointerSize;
     const int kIndexOffset = kLimitOffset - 1 * kPointerSize;
+    __ Untaint(rax);
     __ push(rax);  // limit
     __ push(Immediate(0));  // index
 
