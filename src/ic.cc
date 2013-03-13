@@ -146,6 +146,12 @@ IC::IC(FrameDepth depth, Isolate* isolate, TaintWrapperFlag taint)
   fp_ = fp;
   pc_address_ = pc_address;
   has_taint_wrapper_ = has_taint_wrapper;
+  if (has_taint_wrapper) {
+    taint_wrapper_pc_address_ =
+      reinterpret_cast<Address*>(fp + StandardFrameConstants::kCallerPCOffset);
+  } else {
+    taint_wrapper_pc_address_ = NULL;
+  }
 }
 
 
@@ -371,6 +377,7 @@ void IC::Clear(Address address) {
 Code* IC::GetTaintWrapper(Code* target) {
   ASSERT(!target->is_taint_wrapper_stub());
   if (target->taint_wrapper()->IsCode()) {
+    ASSERT(Code::cast(target->taint_wrapper())->wrapped_code() == target);
     return Code::cast(target->taint_wrapper());
   }
   Code* wrapper = *GenerateTaintWrapper(Handle<Code>(target));

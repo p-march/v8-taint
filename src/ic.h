@@ -104,6 +104,7 @@ class IC {
   inline Address address();
 
   bool has_taint_wrapper() { return has_taint_wrapper_; }
+  inline Address taint_wrapper_address();
 
   // Compute the current IC state based on the target stub, receiver and name.
   static State StateFrom(Code* target, Object* receiver, Object* name);
@@ -143,6 +144,7 @@ class IC {
  protected:
   Address fp() const { return fp_; }
   Address pc() const { return *pc_address_; }
+  Address taint_wrapper_pc() const { return *taint_wrapper_pc_address_; }
   Isolate* isolate() const { return isolate_; }
 
 #ifdef ENABLE_DEBUGGER_SUPPORT
@@ -168,12 +170,15 @@ class IC {
   // Set the call-site target.
   void set_target(Code* code) {
     if (FLAG_use_taint_spec &&
-        taint_flag_ == TAINT_WRAPPER &&
-        !has_taint_wrapper()) {
+        taint_flag_ == TAINT_WRAPPER) {
       code = GetTaintWrapper(code);
     }
-    ASSERT(!(has_taint_wrapper() && code->is_taint_wrapper_stub()));
-    SetTargetAtAddress(address(), code);
+    if (has_taint_wrapper()) {
+      SetTargetAtAddress(taint_wrapper_address(), code);
+    } else {
+      ASSERT(!(has_taint_wrapper() && code->is_taint_wrapper_stub()));
+      SetTargetAtAddress(address(), code);
+    }
   }
 
 #ifdef DEBUG
@@ -203,6 +208,7 @@ class IC {
   Address* pc_address_;
 
   bool has_taint_wrapper_;
+  Address* taint_wrapper_pc_address_;
 
   Isolate* isolate_;
 

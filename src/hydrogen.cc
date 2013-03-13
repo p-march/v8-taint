@@ -4563,7 +4563,6 @@ void HGraphBuilder::VisitProperty(Property* expr) {
     instr->set_position(expr->position());
     return ast_context()->ReturnInstruction(instr, expr->id());
   } else if (expr->IsFunctionPrototype()) {
-    ASSERT(!taint_enabled);
     HValue* function = Pop();
     AddInstruction(new(zone()) HCheckNonSmi(function));
     instr = new(zone()) HLoadFunctionPrototype(function);

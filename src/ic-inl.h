@@ -64,6 +64,34 @@ Address IC::address() {
 }
 
 
+Address IC::taint_wrapper_address() {
+  // Get the address of the call.
+  Address result = taint_wrapper_pc() - Assembler::kCallTargetAddressOffset;
+
+#ifdef ENABLE_DEBUGGER_SUPPORT
+  Debug* debug = Isolate::Current()->debug();
+  // First check if any break points are active if not just return the address
+  // of the call.
+  if (!debug->has_break_points()) return result;
+
+  // At least one break point is active perform additional test to ensure that
+  // break point locations are updated correctly.
+  if (debug->IsDebugBreak(Assembler::target_address_at(result))) {
+    // If the call site is a call to debug break then return the address in
+    // the original code instead of the address in the running code. This will
+    // cause the original code to be updated and keeps the breakpoint active in
+    // the running code.
+    return OriginalCodeAddress();
+  } else {
+    // No break point here just return the address of the call.
+    return result;
+  }
+#else
+  return result;
+#endif
+}
+
+
 Code* IC::GetTargetAtAddress(Address address) {
   // Get the target address of the IC.
   Address target = Assembler::target_address_at(address);
