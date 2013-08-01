@@ -107,10 +107,12 @@ class MessageTestConfiguration(test.TestConfiguration):
     mjsunit = [current_path + [t] for t in self.Ls(self.root)]
     regress = [current_path + ['regress', t] for t in self.Ls(join(self.root, 'regress'))]
     bugs = [current_path + ['bugs', t] for t in self.Ls(join(self.root, 'bugs'))]
+    taint = [current_path + ['taint', t] for t in self.Ls(join(self.root, 'taint'))]
     mjsunit.sort()
     regress.sort()
     bugs.sort()
-    all_tests = mjsunit + regress + bugs
+    taint.sort()
+    all_tests = mjsunit + regress + bugs + taint
     result = []
     for test in all_tests:
       if self.Contains(path, test):
