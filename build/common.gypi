@@ -86,7 +86,7 @@
     'soname_version%': '',
 
     # Taint policy support
-    'enable_js_taint_policy%': 0,
+    'enable_js_taint_policy%': 1,
   },
   'target_defaults': {
     'conditions': [

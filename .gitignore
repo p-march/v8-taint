@@ -2,7 +2,6 @@
 *.exe
 *.idb
 *.lib
-*.log
 *.map
 *.mk
 *.ncb
